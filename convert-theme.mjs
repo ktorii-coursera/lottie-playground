@@ -178,6 +178,17 @@ function walkAndSwapColors(obj) {
 
 walkAndSwapColors(lottieData);
 
+// Remove slots and sid references — this is a standalone dark file,
+// so stale slot values (especially unswapped gradient slots) would
+// override the correctly-swapped inline values in players.
+delete lottieData.slots;
+(function removeSids(obj) {
+  if (!obj || typeof obj !== "object") return;
+  if (Array.isArray(obj)) { obj.forEach(removeSids); return; }
+  delete obj.sid;
+  for (const value of Object.values(obj)) removeSids(value);
+})(lottieData);
+
 console.log(`\nSwapped ${swapCount} color value(s).`);
 
 // Write output JSON
