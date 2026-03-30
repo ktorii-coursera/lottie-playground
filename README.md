@@ -289,3 +289,40 @@ The answers here determine which approach we take.
 3. **Are animators OK with only using colors from the CDS token library?** The plugin approach restricts the palette to defined tokens.
    - If yes: plugin approach works cleanly.
    - If no: we need to support arbitrary colors alongside tokens, which complicates the mapping and theming story significantly.
+
+---
+
+## Workstream assignments
+
+All three workstreams can happen in parallel. The sidecar format is the contract between them, so agree on the schema first.
+
+### Workstream 1: Figma Plugin (Dylan Parks)
+
+Build a Figma plugin that exports illustrations with token metadata.
+
+- Read the CDS token library (or a synced JSON file) so the plugin knows all available tokens and their light/dark values
+- On export, walk the illustration layers and resolve each color back to its token name
+- Output: SVG + a sidecar JSON mapping file with layer name, property (fill/stroke), and token name
+- Handle edge cases: ungrouped layers, nested groups, colors that don't match any token (warn the designer)
+- Stretch: validate that the illustration only uses token colors before allowing export
+
+### Workstream 2: After Effects Plugin (Abhishek Vishwakarma)
+
+Build an AE script/plugin that gives animators access to the token palette and maintains the sidecar mapping.
+
+- Read the CDS token library to populate a token color picker panel
+- When an animator applies a color from the panel, record the mapping: shape/layer + property + token name
+- Import the Figma sidecar on SVG import so existing mappings carry over
+- On export (pre-Bodymovin), write an updated sidecar JSON with any changes the animator made
+- Key technical question to answer first: can an AE ExtendScript/CEP plugin attach custom metadata to individual shape color properties, and can it be read back reliably?
+
+### Workstream 3: Sidecar-aware conversion script (Shivam Thapliyal)
+
+Update the conversion pipeline to use the sidecar mapping instead of hex-based color matching.
+
+- Define the sidecar JSON schema (coordinate with workstreams 1 and 2 so all three agree on the format)
+- New script: reads Lottie JSON + sidecar, matches by layer name + property instead of color value
+- Add `sid` references and build slots/theme rules using exact token names from the sidecar
+- Warn on unmatched layers (colors in the Lottie JSON with no sidecar entry)
+- Warn on stale mappings (sidecar entries that don't match any layer in the Lottie JSON)
+- Fallback: if no sidecar is provided, fall back to the existing hex-based matching (current behavior)
