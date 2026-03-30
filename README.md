@@ -292,37 +292,134 @@ The answers here determine which approach we take.
 
 ---
 
+## Tools
+
+Working implementations of all three pieces live in this repo. They share a common sidecar JSON format defined in `sidecar-schema.json`.
+
+### Figma Plugin (`figma-plugin/`)
+
+Exports an SVG and a sidecar JSON that maps each layer's colors to CDS design tokens.
+
+**Setup:**
+1. Open Figma desktop app
+2. Go to **Plugins > Development > Import plugin from manifest...**
+3. Select `figma-plugin/manifest.json`
+4. Compile the TypeScript:
+   ```bash
+   cd figma-plugin
+   npx -p typescript tsc code.ts --outDir . --target ES2017 --lib ES2017 --skipLibCheck
+   ```
+
+**Usage:**
+1. Select a frame or group in Figma
+2. Run the plugin: **Plugins > Development > Lottie Token Exporter**
+3. Paste the CDS token library JSON (same format as `theme-tokens.json`)
+4. Click **Export Selection**
+5. The plugin walks all layers, matches fill/stroke colors to token light values, and shows matched mappings + warnings for unmatched colors
+6. Download the SVG and sidecar JSON
+
+### After Effects Plugin (`ae-plugin/`)
+
+A CEP panel that gives animators a token color palette and tracks which token is applied to which layer.
+
+**Setup:**
+1. Replace `ae-plugin/CSInterface.js` with the official Adobe version from [CEP-Resources](https://github.com/AdobeDev/CEP-Resources/blob/master/CEP_11.x/CSInterface.js)
+2. Enable unsigned extensions:
+   ```bash
+   # macOS
+   defaults write com.adobe.CSXS.11 PlayerDebugMode 1
+   # Windows: set PlayerDebugMode=1 in HKEY_CURRENT_USER\Software\Adobe\CSXS.11
+   ```
+3. Symlink to AE's extensions directory:
+   ```bash
+   # macOS
+   ln -s "$(pwd)/ae-plugin" ~/Library/Application\ Support/Adobe/CEP/extensions/com.coursera.lottie.tokenpainter
+   # Windows
+   mklink /D "%APPDATA%\Adobe\CEP\extensions\com.coursera.lottie.tokenpainter" "%CD%\ae-plugin"
+   ```
+4. Restart After Effects, then go to **Window > Extensions > Lottie Token Painter**
+
+**Usage:**
+1. Paste token library JSON and click **Parse Tokens** to see the color palette
+2. Select a shape layer in AE, click a token in the palette, choose the property type (fill/stroke/all)
+3. Click **Apply to Selected**, the light color is applied and the mapping is recorded
+4. **Import Sidecar** to load an existing sidecar from the Figma plugin
+5. **Export Sidecar** to save all mappings for the conversion script
+
+### Sidecar Conversion Script (`convert-with-sidecar.mjs`)
+
+Converts a Lottie JSON to a themed dotLottie using exact token mappings from the sidecar instead of hex-based guessing.
+
+**Usage:**
+```bash
+node convert-with-sidecar.mjs <input.json> <sidecar.json> <theme-tokens.json>
+```
+
+**Example:**
+```bash
+node convert-with-sidecar.mjs "assets/Comp 1.json" "assets/comp1-sidecar.json" theme-tokens.json
+```
+
+**Output:**
+- `assets/Comp 1-themed.json` - Lottie JSON with `slots` and `sid` references
+- `assets/Comp 1-themed.lottie` - dotLottie with Dark theme
+
+**What it does:**
+1. Reads the Lottie JSON and walks the tree, building layer paths from `nm` (name) fields
+2. Matches each path against the sidecar's `layerPath` entries
+3. For each match, adds `sid` to the correct color property (`fill` → `ty: "fl"`, `stroke` → `ty: "st"`, etc.)
+4. Validates the actual color in the Lottie matches the sidecar's expected hex (warns on mismatch)
+5. Warns about stale sidecar entries that don't match any layer
+6. Builds slots + Dark theme rules from the token library
+7. Packages as a dotLottie with the Dark theme embedded
+
+**Fallback:** If no sidecar is available, use the existing `convert-to-themed-lottie.mjs` which does hex-based matching.
+
+### Sidecar Format
+
+All three tools produce and consume the same JSON format:
+
+```json
+{
+  "version": "1.0",
+  "source": "figma-plugin",
+  "mappings": [
+    {
+      "layerPath": "Shape Layer 1/Polystar 1/Fill 1",
+      "property": "fill",
+      "token": "cds-fill-interactive-hard",
+      "hex": "#d52c2c"
+    }
+  ]
+}
+```
+
+- `layerPath`: slash-separated path of layer names from root to the target shape
+- `property`: `fill`, `stroke`, `gradient-fill`, or `gradient-stroke`
+- `token`: CDS token name
+- `hex`: expected light-mode hex (used for validation)
+
+Full schema: `sidecar-schema.json`
+
+### End-to-end workflow
+
+```
+1. Designer creates illustration in Figma using CDS token colors
+2. Figma plugin exports SVG + sidecar.json
+3. Animator imports SVG into After Effects
+4. AE plugin imports the sidecar, provides token palette
+5. Animator animates (changes colors only via the token palette)
+6. AE plugin exports updated sidecar.json
+7. Bodymovin exports Lottie JSON as usual
+8. Conversion script reads Lottie JSON + sidecar → themed .lottie with dark mode
+```
+
+---
+
 ## Workstream assignments
 
-All three workstreams can happen in parallel. The sidecar format is the contract between them, so agree on the schema first.
+All three workstreams can run in parallel. The sidecar schema (`sidecar-schema.json`) is the shared contract.
 
-### Workstream 1: Figma Plugin (Dylan Parks)
-
-Build a Figma plugin that exports illustrations with token metadata.
-
-- Read the CDS token library (or a synced JSON file) so the plugin knows all available tokens and their light/dark values
-- On export, walk the illustration layers and resolve each color back to its token name
-- Output: SVG + a sidecar JSON mapping file with layer name, property (fill/stroke), and token name
-- Handle edge cases: ungrouped layers, nested groups, colors that don't match any token (warn the designer)
-- Stretch: validate that the illustration only uses token colors before allowing export
-
-### Workstream 2: After Effects Plugin (Abhishek Vishwakarma)
-
-Build an AE script/plugin that gives animators access to the token palette and maintains the sidecar mapping.
-
-- Read the CDS token library to populate a token color picker panel
-- When an animator applies a color from the panel, record the mapping: shape/layer + property + token name
-- Import the Figma sidecar on SVG import so existing mappings carry over
-- On export (pre-Bodymovin), write an updated sidecar JSON with any changes the animator made
-- Key technical question to answer first: can an AE ExtendScript/CEP plugin attach custom metadata to individual shape color properties, and can it be read back reliably?
-
-### Workstream 3: Sidecar-aware conversion script (Shivam Thapliyal)
-
-Update the conversion pipeline to use the sidecar mapping instead of hex-based color matching.
-
-- Define the sidecar JSON schema (coordinate with workstreams 1 and 2 so all three agree on the format)
-- New script: reads Lottie JSON + sidecar, matches by layer name + property instead of color value
-- Add `sid` references and build slots/theme rules using exact token names from the sidecar
-- Warn on unmatched layers (colors in the Lottie JSON with no sidecar entry)
-- Warn on stale mappings (sidecar entries that don't match any layer in the Lottie JSON)
-- Fallback: if no sidecar is provided, fall back to the existing hex-based matching (current behavior)
+- **Dylan Parks** - Figma Plugin: refine and test `figma-plugin/` with real Figma illustrations
+- **Abhishek Vishwakarma** - AE Plugin: refine and test `ae-plugin/` in After Effects with real animations
+- **Shivam Thapliyal** - Conversion Script: refine `convert-with-sidecar.mjs`, test with complex production animations
