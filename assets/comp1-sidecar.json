@@ -1,0 +1,18 @@
+{
+  "version": "1.0",
+  "source": "manual",
+  "mappings": [
+    {
+      "layerPath": "Shape Layer 1/Polystar 1/Stroke 1",
+      "property": "stroke",
+      "token": "cds-stroke-hard",
+      "hex": "#003872"
+    },
+    {
+      "layerPath": "Shape Layer 1/Polystar 1/Fill 1",
+      "property": "fill",
+      "token": "cds-fill-interactive-hard",
+      "hex": "#d52c2c"
+    }
+  ]
+}

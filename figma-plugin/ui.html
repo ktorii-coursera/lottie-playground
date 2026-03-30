@@ -1,0 +1,195 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: Inter, system-ui, -apple-system, sans-serif;
+    font-size: 13px;
+    color: #333;
+    padding: 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    height: 100vh;
+  }
+  h2 { font-size: 15px; font-weight: 600; }
+  label { font-weight: 500; display: block; margin-bottom: 4px; }
+  textarea {
+    width: 100%;
+    height: 140px;
+    font-family: monospace;
+    font-size: 12px;
+    border: 1px solid #ccc;
+    border-radius: 4px;
+    padding: 8px;
+    resize: vertical;
+  }
+  textarea:focus { outline: 2px solid #0d6efd; border-color: transparent; }
+  button {
+    background: #0d6efd;
+    color: #fff;
+    border: none;
+    border-radius: 4px;
+    padding: 8px 16px;
+    font-size: 13px;
+    font-weight: 500;
+    cursor: pointer;
+  }
+  button:hover { background: #0b5ed7; }
+  button:disabled { background: #999; cursor: not-allowed; }
+  .status { padding: 8px; border-radius: 4px; font-size: 12px; }
+  .status.error { background: #fce4e4; color: #a00; }
+  .status.success { background: #e4fce8; color: #060; }
+  .warnings { background: #fff8e1; border-radius: 4px; padding: 8px; font-size: 12px; }
+  .warnings summary { cursor: pointer; font-weight: 500; color: #7a5900; }
+  .warnings ul { margin: 6px 0 0 16px; }
+  .warnings li { margin-bottom: 2px; }
+  .downloads { display: flex; gap: 8px; flex-wrap: wrap; }
+  .downloads a {
+    display: inline-block;
+    padding: 6px 12px;
+    background: #28a745;
+    color: #fff;
+    border-radius: 4px;
+    text-decoration: none;
+    font-size: 12px;
+    font-weight: 500;
+  }
+  .downloads a:hover { background: #218838; }
+  #results { display: flex; flex-direction: column; gap: 8px; overflow-y: auto; }
+  .mappings-table { width: 100%; border-collapse: collapse; font-size: 11px; }
+  .mappings-table th, .mappings-table td { padding: 4px 6px; border: 1px solid #ddd; text-align: left; }
+  .mappings-table th { background: #f5f5f5; font-weight: 600; }
+  .color-swatch {
+    display: inline-block; width: 14px; height: 14px;
+    border: 1px solid #ccc; border-radius: 2px; vertical-align: middle; margin-right: 4px;
+  }
+</style>
+</head>
+<body>
+  <h2>Lottie Token Exporter</h2>
+
+  <div>
+    <label for="tokens">Token Library JSON</label>
+    <textarea id="tokens" placeholder='{"cds-stroke-hard": {"light": "#003872", "dark": "#7EB6FF"}, ...}'></textarea>
+  </div>
+
+  <button id="export-btn">Export Selection</button>
+
+  <div id="results"></div>
+
+<script>
+  const tokensEl = document.getElementById('tokens');
+  const exportBtn = document.getElementById('export-btn');
+  const resultsEl = document.getElementById('results');
+
+  exportBtn.addEventListener('click', () => {
+    resultsEl.innerHTML = '';
+    let tokens;
+    try {
+      tokens = JSON.parse(tokensEl.value);
+    } catch (e) {
+      showStatus('Invalid JSON: ' + e.message, true);
+      return;
+    }
+    exportBtn.disabled = true;
+    exportBtn.textContent = 'Exporting...';
+    parent.postMessage({ pluginMessage: { type: 'export', tokens } }, '*');
+  });
+
+  window.onmessage = (event) => {
+    const msg = event.data.pluginMessage;
+    if (!msg) return;
+
+    exportBtn.disabled = false;
+    exportBtn.textContent = 'Export Selection';
+
+    if (msg.type === 'error') {
+      showStatus(msg.message, true);
+      return;
+    }
+
+    if (msg.type === 'export-result') {
+      const { svgString, sidecar, unmatched, nodeName } = msg;
+      const safeName = nodeName.replace(/[^a-zA-Z0-9_-]/g, '_');
+
+      // Status
+      showStatus(
+        `Found ${sidecar.mappings.length} token mapping(s) in "${nodeName}".`,
+        false
+      );
+
+      // Unmatched warnings
+      if (unmatched.length > 0) {
+        const details = document.createElement('details');
+        details.className = 'warnings';
+        details.innerHTML =
+          `<summary>${unmatched.length} unmatched color(s)</summary><ul>` +
+          unmatched
+            .map(
+              (u) =>
+                `<li><span class="color-swatch" style="background:${u.hex}"></span>${u.hex} on <b>${u.property}</b> in ${u.layerPath}</li>`
+            )
+            .join('') +
+          '</ul>';
+        resultsEl.appendChild(details);
+      }
+
+      // Mappings table
+      if (sidecar.mappings.length > 0) {
+        const table = document.createElement('table');
+        table.className = 'mappings-table';
+        table.innerHTML =
+          '<tr><th>Layer Path</th><th>Property</th><th>Token</th><th>Hex</th></tr>' +
+          sidecar.mappings
+            .map(
+              (m) =>
+                `<tr><td>${esc(m.layerPath)}</td><td>${m.property}</td><td>${esc(m.token)}</td><td><span class="color-swatch" style="background:${m.hex}"></span>${m.hex}</td></tr>`
+            )
+            .join('');
+        resultsEl.appendChild(table);
+      }
+
+      // Download links
+      const downloadsDiv = document.createElement('div');
+      downloadsDiv.className = 'downloads';
+
+      const svgBlob = new Blob([svgString], { type: 'image/svg+xml' });
+      const svgUrl = URL.createObjectURL(svgBlob);
+      const svgLink = document.createElement('a');
+      svgLink.href = svgUrl;
+      svgLink.download = `${safeName}.svg`;
+      svgLink.textContent = 'Download SVG';
+      downloadsDiv.appendChild(svgLink);
+
+      const sidecarBlob = new Blob([JSON.stringify(sidecar, null, 2)], {
+        type: 'application/json',
+      });
+      const sidecarUrl = URL.createObjectURL(sidecarBlob);
+      const sidecarLink = document.createElement('a');
+      sidecarLink.href = sidecarUrl;
+      sidecarLink.download = `${safeName}.sidecar.json`;
+      sidecarLink.textContent = 'Download Sidecar JSON';
+      downloadsDiv.appendChild(sidecarLink);
+
+      resultsEl.appendChild(downloadsDiv);
+    }
+  };
+
+  function showStatus(message, isError) {
+    const div = document.createElement('div');
+    div.className = 'status ' + (isError ? 'error' : 'success');
+    div.textContent = message;
+    resultsEl.prepend(div);
+  }
+
+  function esc(str) {
+    const d = document.createElement('div');
+    d.textContent = str;
+    return d.innerHTML;
+  }
+</script>
+</body>
+</html>

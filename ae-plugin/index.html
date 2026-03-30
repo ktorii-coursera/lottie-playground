@@ -1,0 +1,116 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Lottie Token Painter</title>
+  <link rel="stylesheet" href="css/styles.css" />
+</head>
+<body>
+
+  <!-- ================================================================== -->
+  <!-- Section: Token Library                                             -->
+  <!-- ================================================================== -->
+  <div class="section">
+    <div class="section-header" data-section="token-library">
+      <h2>Token Library</h2>
+      <span class="toggle-icon">&#9660;</span>
+    </div>
+    <div class="section-body" id="token-library-body">
+      <p class="mb-4" style="font-size:11px;color:var(--text-secondary);">
+        Paste CDS token JSON or load from file.
+      </p>
+      <textarea id="token-json-input" placeholder='{"cds-stroke-hard":{"light":"#003872","dark":"#7EB6FF"}, ...}'></textarea>
+      <div class="action-bar">
+        <button id="btn-load-tokens">Load from File</button>
+        <button id="btn-parse-tokens" class="primary">Parse Tokens</button>
+      </div>
+      <div id="token-palette" class="mt-4"></div>
+    </div>
+  </div>
+
+  <!-- ================================================================== -->
+  <!-- Section: Apply Token                                               -->
+  <!-- ================================================================== -->
+  <div class="section">
+    <div class="section-header" data-section="apply-token">
+      <h2>Apply Token</h2>
+      <span class="toggle-icon">&#9660;</span>
+    </div>
+    <div class="section-body" id="apply-token-body">
+      <div id="selection-info">
+        <span class="empty-state">Select a layer in After Effects, then click Refresh.</span>
+      </div>
+      <div class="property-type-row">
+        <label for="property-type-select">Property:</label>
+        <select id="property-type-select">
+          <option value="all">All (fill + stroke)</option>
+          <option value="fill">Fill only</option>
+          <option value="stroke">Stroke only</option>
+          <option value="gradient-fill">Gradient Fill</option>
+          <option value="gradient-stroke">Gradient Stroke</option>
+        </select>
+      </div>
+      <div class="action-bar">
+        <button id="btn-refresh-selection">Refresh Selection</button>
+        <button id="btn-apply-token" class="primary">Apply to Selected</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ================================================================== -->
+  <!-- Section: Mappings                                                  -->
+  <!-- ================================================================== -->
+  <div class="section">
+    <div class="section-header" data-section="mappings">
+      <h2>Mappings (<span id="mapping-count">0</span>)</h2>
+      <span class="toggle-icon">&#9660;</span>
+    </div>
+    <div class="section-body" id="mappings-body">
+      <div id="mappings-table-container">
+        <p class="empty-state" id="mappings-empty">No mappings yet. Apply tokens to layers to build mappings.</p>
+        <table class="mappings-table" id="mappings-table" style="display:none;">
+          <thead>
+            <tr>
+              <th>Layer Path</th>
+              <th>Prop</th>
+              <th>Token</th>
+              <th>Hex</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody id="mappings-tbody"></tbody>
+        </table>
+      </div>
+      <div class="action-bar">
+        <button id="btn-clear-mappings" class="danger">Clear All</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ================================================================== -->
+  <!-- Section: Import / Export Sidecar                                   -->
+  <!-- ================================================================== -->
+  <div class="section">
+    <div class="section-header" data-section="sidecar">
+      <h2>Sidecar JSON</h2>
+      <span class="toggle-icon">&#9660;</span>
+    </div>
+    <div class="section-body" id="sidecar-body">
+      <div class="action-bar mb-4">
+        <button id="btn-import-sidecar">Import Sidecar</button>
+        <button id="btn-export-sidecar" class="primary">Export Sidecar</button>
+      </div>
+      <textarea id="sidecar-preview" readonly placeholder="Exported sidecar JSON will appear here..."></textarea>
+    </div>
+  </div>
+
+  <!-- ================================================================== -->
+  <!-- Status bar                                                         -->
+  <!-- ================================================================== -->
+  <div id="status-bar">Ready</div>
+
+  <!-- CSInterface library - provided by the CEP runtime -->
+  <script src="CSInterface.js"></script>
+  <script src="js/main.js"></script>
+</body>
+</html>

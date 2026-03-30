@@ -1,0 +1,11 @@
+{
+  "name": "Lottie Token Exporter",
+  "id": "lottie-token-exporter",
+  "api": "1.0.0",
+  "main": "code.js",
+  "ui": "ui.html",
+  "editorType": ["figma"],
+  "networkAccess": {
+    "allowedDomains": ["none"]
+  }
+}

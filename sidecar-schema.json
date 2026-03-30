@@ -1,0 +1,45 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Lottie Token Sidecar",
+  "description": "Maps layers/properties in a Lottie animation to CDS design tokens. Shared contract between the Figma plugin, AE plugin, and conversion script.",
+  "type": "object",
+  "required": ["version", "mappings"],
+  "properties": {
+    "version": {
+      "type": "string",
+      "const": "1.0"
+    },
+    "source": {
+      "type": "string",
+      "description": "Which tool produced this sidecar",
+      "enum": ["figma-plugin", "ae-plugin", "manual"]
+    },
+    "mappings": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["layerPath", "property", "token"],
+        "properties": {
+          "layerPath": {
+            "type": "string",
+            "description": "Slash-separated path of layer names from root to the target shape, e.g. 'Group 1/Icon/Outline'"
+          },
+          "property": {
+            "type": "string",
+            "description": "Which color property this mapping applies to",
+            "enum": ["fill", "stroke", "gradient-fill", "gradient-stroke"]
+          },
+          "token": {
+            "type": "string",
+            "description": "CDS token name, e.g. 'cds-stroke-hard'"
+          },
+          "hex": {
+            "type": "string",
+            "description": "Expected light-mode hex value for validation, e.g. '#003872'",
+            "pattern": "^#[0-9a-fA-F]{6}$"
+          }
+        }
+      }
+    }
+  }
+}
