@@ -55,7 +55,7 @@ function LottiePreview({
   return (
     <div className="flex flex-col items-center gap-2">
       <div
-        className={`w-48 h-48 rounded-lg border overflow-hidden ${
+        className={`w-full aspect-square max-w-lg rounded-lg border overflow-hidden ${
           theme === "dark"
             ? "bg-gray-900 border-gray-700"
             : "bg-white border-gray-300"
@@ -103,7 +103,7 @@ function ThemedLottiePreview({
   return (
     <div className="flex flex-col items-center gap-2">
       <div
-        className={`w-48 h-48 rounded-lg border overflow-hidden ${
+        className={`w-full aspect-square max-w-lg rounded-lg border overflow-hidden ${
           theme === "dark"
             ? "bg-gray-900 border-gray-700"
             : "bg-white border-gray-300"
@@ -193,7 +193,7 @@ export default function Home() {
   const baseName = fileName.replace(/\.json$/i, "") || "animation";
 
   return (
-    <main className="min-h-screen p-6 md:p-12 max-w-5xl mx-auto">
+    <main className="min-h-screen p-6 md:p-12 max-w-7xl mx-auto">
       <h1 className="text-3xl font-bold mb-2">Lottie Theme Playground</h1>
       <p className="text-sm text-gray-500 mb-8">
         Upload a light-mode Lottie JSON and theme tokens to generate light,
