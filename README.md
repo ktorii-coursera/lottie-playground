@@ -211,3 +211,75 @@ Both scripts match colors purely by comparing `[r, g, b]` values against the tok
 ### 7. Needs validation with real production animations
 
 Need to test with complex lottie animations our animators actually use, in case colors are handled differently than what we expect (like a single color hex with effects applied on top, or if the export actually calculates the color values at gradient stops from effects rather than preserving the original hex).
+
+---
+
+## Proposed approach: plugin-based token tagging
+
+The current scripts rely on post-export color matching, which is fragile (see limitations above). A better long-term approach is to tag colors with their token names at design time, so the conversion script knows exactly which token each color belongs to without guessing from hex values.
+
+### Overview
+
+```
+┌─────────────┐     ┌──────────────────┐     ┌──────────────────┐     ┌──────────────┐     ┌─────────────────┐
+│   Figma      │     │  Figma Plugin    │     │  After Effects   │     │  Bodymovin   │     │  Our Script     │
+│  (tokens)    │────▶│  exports SVG +   │────▶│  AE Plugin gives │────▶│  exports     │────▶│  reads sidecar, │
+│              │     │  sidecar mapping │     │  animators token │     │  Lottie JSON │     │  adds sid/slots │
+└─────────────┘     └──────────────────┘     │  color palette   │     │  (untouched) │     │  (no guessing)  │
+                                             └──────────────────┘     └──────────────┘     └─────────────────┘
+```
+
+### Step 1: Figma Plugin
+
+Designers create illustrations in Figma using CDS design tokens. A Figma plugin exports:
+
+- The SVG file (as usual)
+- A **sidecar mapping file** that records which token was used for each element, at the layer+property level:
+
+```json
+{
+  "mappings": [
+    { "layer": "Icon outline", "property": "stroke", "token": "cds-stroke-hard" },
+    { "layer": "Background", "property": "fill", "token": "cds-fill-interactive-hard" },
+    { "layer": "Border ring", "property": "stroke", "token": "cds-border-accent" }
+  ]
+}
+```
+
+This solves the ambiguity problem: even if `cds-stroke-hard` and `cds-border-accent` share the same light hex, the sidecar knows which layer uses which token.
+
+### Step 2: After Effects Plugin
+
+The animator imports the SVG into AE. An AE plugin/script:
+
+- Reads the sidecar mapping (or syncs with the CDS token library directly)
+- Provides a **token color palette** so the animator picks colors by token name, not by hex
+- When the animator applies a color, the plugin records which token was used on which shape/property
+- On export, the plugin writes an updated sidecar file with any color changes the animator made
+
+This means animators can change colors during animation, but only from the token library. The mapping stays intact.
+
+### Step 3: Conversion Script
+
+Our existing script reads the sidecar instead of doing hex-based color matching. It knows the exact token for each layer+property, so it can:
+
+- Add `sid` references with zero ambiguity
+- Build the dark theme rules correctly
+- Warn if any colors in the Lottie JSON don't have a sidecar entry (meaning the animator introduced an untracked color)
+
+### What this doesn't solve
+
+- Effects that derive new colors from a base (e.g., AE calculates gradient stops or glow colors from a source color). These derived values won't be in the sidecar.
+- Any color introduced outside the token palette in AE
+
+---
+
+## Open questions for the animation team
+
+Before committing to this approach, we need answers from the animators:
+
+1. **Do animators change colors inside After Effects?** Or do they always use exactly what comes from Figma? If they never change colors, the Figma plugin alone might be enough and we wouldn't need an AE plugin.
+
+2. **Do AE effects introduce new color values?** For example, does applying a glow, shadow, or tint effect cause Bodymovin to export calculated color values at each stop/keyframe that differ from the original hex? Or does the Lottie JSON preserve the original color and represent the effect separately? This determines whether our color matching approach is fundamentally viable.
+
+3. **Are animators OK with only using colors from the CDS token library?** The plugin approach restricts the palette to defined tokens. If animators need to use arbitrary colors (for shadows, accents, derived shades), we need a different strategy for those.
