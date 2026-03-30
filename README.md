@@ -276,10 +276,16 @@ Our existing script reads the sidecar instead of doing hex-based color matching.
 
 ## Open questions for the animation team
 
-Before committing to this approach, we need answers from the animators:
+The answers here determine which approach we take.
 
-1. **Do animators change colors inside After Effects?** Or do they always use exactly what comes from Figma? If they never change colors, the Figma plugin alone might be enough and we wouldn't need an AE plugin.
+1. **Do animators change colors inside After Effects?** Or do they always use exactly what comes from Figma?
+   - If no: Figma plugin + sidecar is enough, no AE plugin needed.
+   - If yes: we need the AE plugin with a token palette to keep mappings intact.
 
-2. **Do AE effects introduce new color values?** For example, does applying a glow, shadow, or tint effect cause Bodymovin to export calculated color values at each stop/keyframe that differ from the original hex? Or does the Lottie JSON preserve the original color and represent the effect separately? This determines whether our color matching approach is fundamentally viable.
+2. **Do AE effects introduce new color values?** For example, does applying a glow, shadow, or tint effect cause Bodymovin to export calculated color values at each stop/keyframe that differ from the original hex? Or does the Lottie JSON preserve the original color and represent the effect separately?
+   - If effects preserve original colors: our approach works.
+   - If effects calculate new derived colors: color matching (and possibly the plugin approach) breaks for those values, and we need a different strategy.
 
-3. **Are animators OK with only using colors from the CDS token library?** The plugin approach restricts the palette to defined tokens. If animators need to use arbitrary colors (for shadows, accents, derived shades), we need a different strategy for those.
+3. **Are animators OK with only using colors from the CDS token library?** The plugin approach restricts the palette to defined tokens.
+   - If yes: plugin approach works cleanly.
+   - If no: we need to support arbitrary colors alongside tokens, which complicates the mapping and theming story significantly.
