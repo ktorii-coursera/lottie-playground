@@ -43,38 +43,8 @@ function downloadBase64(base64: string, filename: string) {
 
 type Theme = "light" | "dark";
 
-function LottiePreview({
-  label,
-  data,
-  theme,
-}: {
-  label: string;
-  data: ArrayBuffer;
-  theme: Theme;
-}) {
-  return (
-    <div className="flex flex-col items-center gap-2">
-      <div
-        className={`w-full aspect-square max-w-lg rounded-lg border overflow-hidden ${
-          theme === "dark"
-            ? "bg-gray-900 border-gray-700"
-            : "bg-white border-gray-300"
-        }`}
-      >
-        <DotLottieReact data={data} autoplay loop />
-      </div>
-      <p className="text-sm text-gray-500">{label}</p>
-    </div>
-  );
-}
-
-function ThemedLottiePreview({
-  data,
-  theme,
-}: {
-  data: ArrayBuffer;
-  theme: Theme;
-}) {
+function ThemedLottiePreview({ data }: { data: ArrayBuffer }) {
+  const [theme, setTheme] = useState<Theme>("dark");
   const [dotLottie, setDotLottie] = useState<DotLottie | null>(null);
 
   const handleRef = useCallback(
@@ -91,19 +61,34 @@ function ThemedLottiePreview({
     [theme]
   );
 
-  // Apply theme when dropdown changes on an already-loaded instance
-  if (dotLottie) {
-    if (theme === "dark") {
-      dotLottie.setTheme("Dark");
-    } else {
-      dotLottie.resetTheme();
-    }
-  }
+  const handleThemeChange = useCallback(
+    (e: React.ChangeEvent<HTMLSelectElement>) => {
+      const newTheme = e.target.value as Theme;
+      setTheme(newTheme);
+      if (dotLottie) {
+        if (newTheme === "dark") {
+          dotLottie.setTheme("Dark");
+        } else {
+          dotLottie.resetTheme();
+        }
+      }
+    },
+    [dotLottie]
+  );
 
   return (
     <div className="flex flex-col items-center gap-2">
+      <p className="text-sm font-medium">Themed (single .lottie with slots)</p>
+      <select
+        value={theme}
+        onChange={handleThemeChange}
+        className="px-3 py-1.5 border rounded-lg text-sm bg-white dark:bg-gray-900 border-gray-300 dark:border-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
+      >
+        <option value="light">Light</option>
+        <option value="dark">Dark</option>
+      </select>
       <div
-        className={`w-full aspect-square max-w-lg rounded-lg border overflow-hidden ${
+        className={`w-full aspect-square rounded-lg border overflow-hidden ${
           theme === "dark"
             ? "bg-gray-900 border-gray-700"
             : "bg-white border-gray-300"
@@ -117,7 +102,6 @@ function ThemedLottiePreview({
           dotLottieRefCallback={handleRef}
         />
       </div>
-      <p className="text-sm text-gray-500">Themed (single file, slots)</p>
     </div>
   );
 }
@@ -129,7 +113,6 @@ export default function Home() {
   const [result, setResult] = useState<ConvertResult | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string>("");
-  const [previewTheme, setPreviewTheme] = useState<Theme>("light");
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   function handleFileUpload(e: React.ChangeEvent<HTMLInputElement>) {
@@ -287,28 +270,34 @@ export default function Home() {
         <div className="mt-8">
           {/* Preview players */}
           <h2 className="text-xl font-semibold mb-4">Preview</h2>
-          <div className="mb-4">
-            <label className="text-sm font-medium mr-3">Theme:</label>
-            <select
-              value={previewTheme}
-              onChange={(e) => setPreviewTheme(e.target.value as Theme)}
-              className="px-3 py-1.5 border rounded-lg text-sm bg-white dark:bg-gray-900 border-gray-300 dark:border-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
-            >
-              <option value="light">Light</option>
-              <option value="dark">Dark</option>
-            </select>
-          </div>
-          <div className="flex gap-6 flex-wrap mb-8">
-            <LottiePreview
-              label={`File swap (${previewTheme})`}
-              data={base64ToArrayBuffer(
-                previewTheme === "dark" ? result.dark : result.light
-              )}
-              theme={previewTheme}
-            />
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+            {/* Light */}
+            <div className="flex flex-col items-center gap-2">
+              <p className="text-sm font-medium">Light</p>
+              <div className="w-full aspect-square rounded-lg border overflow-hidden bg-white border-gray-300">
+                <DotLottieReact
+                  data={base64ToArrayBuffer(result.light)}
+                  autoplay
+                  loop
+                />
+              </div>
+            </div>
+
+            {/* Dark */}
+            <div className="flex flex-col items-center gap-2">
+              <p className="text-sm font-medium">Dark (file swap)</p>
+              <div className="w-full aspect-square rounded-lg border overflow-hidden bg-gray-900 border-gray-700">
+                <DotLottieReact
+                  data={base64ToArrayBuffer(result.dark)}
+                  autoplay
+                  loop
+                />
+              </div>
+            </div>
+
+            {/* Themed with its own dropdown */}
             <ThemedLottiePreview
               data={base64ToArrayBuffer(result.themed)}
-              theme={previewTheme}
             />
           </div>
 
