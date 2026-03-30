@@ -51,11 +51,15 @@ function ThemedLottiePreview({ data }: { data: ArrayBuffer }) {
     (instance: DotLottie | null) => {
       setDotLottie(instance);
       if (instance) {
-        if (theme === "dark") {
-          instance.setTheme("Dark");
-        } else {
-          instance.resetTheme();
-        }
+        // Theme can only be applied after the file is loaded
+        const applyTheme = () => {
+          if (theme === "dark") {
+            instance.setTheme("Dark");
+          } else {
+            instance.resetTheme();
+          }
+        };
+        instance.addEventListener("load", applyTheme);
       }
     },
     [theme]
