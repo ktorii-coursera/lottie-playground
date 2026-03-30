@@ -1,6 +1,8 @@
 "use client";
 
-import { useState, useRef } from "react";
+import { DotLottieReact } from "@lottiefiles/dotlottie-react";
+import type { DotLottie } from "@lottiefiles/dotlottie-react";
+import { useState, useRef, useCallback } from "react";
 
 const DEFAULT_TOKENS = JSON.stringify(
   {
@@ -18,19 +20,106 @@ interface ConvertResult {
   logs: string[];
 }
 
-function downloadBase64(base64: string, filename: string) {
+function base64ToArrayBuffer(base64: string): ArrayBuffer {
   const binary = atob(base64);
   const bytes = new Uint8Array(binary.length);
   for (let i = 0; i < binary.length; i++) {
     bytes[i] = binary.charCodeAt(i);
   }
-  const blob = new Blob([bytes], { type: "application/octet-stream" });
+  return bytes.buffer;
+}
+
+function downloadBase64(base64: string, filename: string) {
+  const blob = new Blob([new Uint8Array(base64ToArrayBuffer(base64))], {
+    type: "application/octet-stream",
+  });
   const url = URL.createObjectURL(blob);
   const a = document.createElement("a");
   a.href = url;
   a.download = filename;
   a.click();
   URL.revokeObjectURL(url);
+}
+
+type Theme = "light" | "dark";
+
+function LottiePreview({
+  label,
+  data,
+  theme,
+}: {
+  label: string;
+  data: ArrayBuffer;
+  theme: Theme;
+}) {
+  return (
+    <div className="flex flex-col items-center gap-2">
+      <div
+        className={`w-48 h-48 rounded-lg border overflow-hidden ${
+          theme === "dark"
+            ? "bg-gray-900 border-gray-700"
+            : "bg-white border-gray-300"
+        }`}
+      >
+        <DotLottieReact data={data} autoplay loop />
+      </div>
+      <p className="text-sm text-gray-500">{label}</p>
+    </div>
+  );
+}
+
+function ThemedLottiePreview({
+  data,
+  theme,
+}: {
+  data: ArrayBuffer;
+  theme: Theme;
+}) {
+  const [dotLottie, setDotLottie] = useState<DotLottie | null>(null);
+
+  const handleRef = useCallback(
+    (instance: DotLottie | null) => {
+      setDotLottie(instance);
+      if (instance) {
+        if (theme === "dark") {
+          instance.setTheme("Dark");
+        } else {
+          instance.resetTheme();
+        }
+      }
+    },
+    [theme]
+  );
+
+  // Apply theme when dropdown changes on an already-loaded instance
+  if (dotLottie) {
+    if (theme === "dark") {
+      dotLottie.setTheme("Dark");
+    } else {
+      dotLottie.resetTheme();
+    }
+  }
+
+  return (
+    <div className="flex flex-col items-center gap-2">
+      <div
+        className={`w-48 h-48 rounded-lg border overflow-hidden ${
+          theme === "dark"
+            ? "bg-gray-900 border-gray-700"
+            : "bg-white border-gray-300"
+        }`}
+      >
+        <DotLottieReact
+          data={data}
+          autoplay
+          loop
+          themeId={theme === "dark" ? "Dark" : ""}
+          dotLottieRefCallback={handleRef}
+        />
+      </div>
+      <p className="text-sm text-gray-500">Themed (single file, slots)</p>
+    </div>
+  );
 }
 
 export default function Home() {
@@ -40,6 +129,7 @@ export default function Home() {
   const [result, setResult] = useState<ConvertResult | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string>("");
+  const [previewTheme, setPreviewTheme] = useState<Theme>("light");
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   function handleFileUpload(e: React.ChangeEvent<HTMLInputElement>) {
@@ -106,8 +196,8 @@ export default function Home() {
     <main className="min-h-screen p-6 md:p-12 max-w-5xl mx-auto">
       <h1 className="text-3xl font-bold mb-2">Lottie Theme Playground</h1>
       <p className="text-sm text-gray-500 mb-8">
-        Upload a light-mode Lottie JSON and theme tokens to generate light, dark,
-        and themed .lottie files.
+        Upload a light-mode Lottie JSON and theme tokens to generate light,
+        dark, and themed .lottie files.
       </p>
 
       <div className="grid md:grid-cols-2 gap-6 mb-8">
@@ -123,8 +213,8 @@ export default function Home() {
             spellCheck={false}
           />
           <p className="text-xs text-gray-400 mt-1">
-            Format: {"{"} &quot;token-name&quot;: {"{"} &quot;light&quot;: &quot;#hex&quot;,
-            &quot;dark&quot;: &quot;#hex&quot; {"}"} {"}"}
+            Format: {"{"} &quot;token-name&quot;: {"{"} &quot;light&quot;:
+            &quot;#hex&quot;, &quot;dark&quot;: &quot;#hex&quot; {"}"} {"}"}
           </p>
         </div>
 
@@ -195,28 +285,68 @@ export default function Home() {
       {/* Results */}
       {result && (
         <div className="mt-8">
+          {/* Preview players */}
+          <h2 className="text-xl font-semibold mb-4">Preview</h2>
+          <div className="mb-4">
+            <label className="text-sm font-medium mr-3">Theme:</label>
+            <select
+              value={previewTheme}
+              onChange={(e) => setPreviewTheme(e.target.value as Theme)}
+              className="px-3 py-1.5 border rounded-lg text-sm bg-white dark:bg-gray-900 border-gray-300 dark:border-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
+            >
+              <option value="light">Light</option>
+              <option value="dark">Dark</option>
+            </select>
+          </div>
+          <div className="flex gap-6 flex-wrap mb-8">
+            <LottiePreview
+              label={`File swap (${previewTheme})`}
+              data={base64ToArrayBuffer(
+                previewTheme === "dark" ? result.dark : result.light
+              )}
+              theme={previewTheme}
+            />
+            <ThemedLottiePreview
+              data={base64ToArrayBuffer(result.themed)}
+              theme={previewTheme}
+            />
+          </div>
+
+          {/* Downloads */}
           <h2 className="text-xl font-semibold mb-4">Downloads</h2>
           <div className="grid sm:grid-cols-3 gap-4 mb-6">
             <button
-              onClick={() => downloadBase64(result.light, `${baseName}-light.lottie`)}
+              onClick={() =>
+                downloadBase64(result.light, `${baseName}-light.lottie`)
+              }
               className="p-4 border rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors text-left border-gray-200 dark:border-gray-700"
             >
               <p className="font-medium">light.lottie</p>
-              <p className="text-sm text-gray-500">Original light-mode animation</p>
+              <p className="text-sm text-gray-500">
+                Original light-mode animation
+              </p>
             </button>
             <button
-              onClick={() => downloadBase64(result.dark, `${baseName}-dark.lottie`)}
+              onClick={() =>
+                downloadBase64(result.dark, `${baseName}-dark.lottie`)
+              }
               className="p-4 border rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors text-left border-gray-200 dark:border-gray-700"
             >
               <p className="font-medium">dark.lottie</p>
-              <p className="text-sm text-gray-500">Color-swapped dark-mode animation</p>
+              <p className="text-sm text-gray-500">
+                Color-swapped dark-mode animation
+              </p>
             </button>
             <button
-              onClick={() => downloadBase64(result.themed, `${baseName}-themed.lottie`)}
+              onClick={() =>
+                downloadBase64(result.themed, `${baseName}-themed.lottie`)
+              }
               className="p-4 border rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors text-left border-gray-200 dark:border-gray-700"
             >
               <p className="font-medium">themed.lottie</p>
-              <p className="text-sm text-gray-500">Slotted with light + dark theme</p>
+              <p className="text-sm text-gray-500">
+                Slotted with light + dark theme
+              </p>
             </button>
           </div>
 

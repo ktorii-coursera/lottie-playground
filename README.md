@@ -97,10 +97,12 @@ node convert-theme.mjs "assets/Comp 1.json" theme-tokens.json
 ```
 
 **Output:**
+
 - `assets/Comp 1-dark.json` — dark-mode Lottie JSON
 - `assets/Comp 1-dark.lottie` — dark-mode dotLottie
 
 **How it works:**
+
 1. Reads the token map and builds a `lightHex → darkHex` lookup
 2. Walks every color property in the Lottie JSON (fills, strokes, animated keyframes)
 3. If a color matches a light hex (within ±1 per channel for rounding tolerance), replaces it with the dark hex
@@ -127,10 +129,12 @@ node convert-to-themed-lottie.mjs "assets/Comp 1.json" theme-tokens.json
 ```
 
 **Output:**
+
 - `assets/Comp 1-themed.json` — Lottie JSON with `slots` and `sid` references added
 - `assets/Comp 1-themed.lottie` — dotLottie containing both Default and Dark themes
 
 **How it works:**
+
 1. Reads the token map and builds a `lightHex → token` lookup
 2. Walks the entire Lottie JSON looking for any color property matching a token value
 3. If a color matches a light hex, adds `"sid": "token-name"` to that property
@@ -158,6 +162,7 @@ Comp 1-themed.lottie (zip)
 The scripts match colors by their light hex value. If **multiple tokens share the same light color but have different dark colors**, the script cannot determine which token applies. It will warn and use the first match.
 
 Example problem:
+
 ```json
 {
   "cds-stroke-hard": { "light": "#003872", "dark": "#7EB6FF" },
@@ -175,9 +180,9 @@ For theming to work, every visible color in the animation must be an exact match
 - Any color that doesn't match a token is left as-is in both light and dark mode
 - This can lead to visual inconsistencies if an animator introduces a color that's close to but not exactly a token value
 
-### 3. Gradients are not supported
+### 3. Gradients (partial support)
 
-Lottie gradients (`gf` for gradient fill, `gs` for gradient stroke) use a different data structure — an array of color stops rather than a single `[r, g, b]` value. Neither script currently handles gradients. Gradient colors will remain unchanged.
+Lottie gradients (`gf` for gradient fill, `gs` for gradient stroke) use a different data structure — an array of color stops rather than a single `[r, g, b]` value. The brute-force swap script handles gradient stops, and the themed script can slot full gradients. However, if a gradient mixes token colors with non-token colors in its stops, only the matching stops are swapped/slotted. Gradients where the designer derived lighter/darker shades from a base token (e.g., a gradient from `#003872` to a 40% lighter variant) will only catch the exact token match, leaving the derived shade unchanged.
 
 ### 4. Special effects, shadows, and ambient occlusion
 
@@ -190,6 +195,7 @@ Lottie doesn't have native ambient occlusion or real shadow systems, but animato
 These shading techniques typically use colors that are **derived from but not identical to** the base token colors (e.g., a shadow might be a 50% opacity black overlay, or a slightly darker variant of the fill). The scripts won't catch these because they don't match any token exactly.
 
 This means animators doing higher-fidelity work with shading and depth effects either:
+
 - Must manually create dark-mode variants of those effects
 - Must limit shading to techniques that don't depend on color (e.g., opacity-only overlays with black/white that work in both themes)
 
@@ -201,3 +207,7 @@ This means animators doing higher-fidelity work with shading and depth effects e
 ### 6. Color matching is value-based
 
 Both scripts match colors purely by comparing `[r, g, b]` values against the token map. This means any color property in the Lottie JSON that matches a token's light value will be swapped/slotted — including fills, strokes, effects, text colors, and solid layers. The tradeoff is that if a non-color property happens to have a 3-element numeric array matching a token color, it could be a false positive (unlikely in practice).
+
+### 7. Needs validation with real production animations
+
+The scripts have only been tested with simple test animations (solid fills, basic gradients). Real production Lottie files from designers often use more complex techniques: multi-stop gradients where individual stops are derived shades (not exact token matches), glow/shadow effects using tinted duplicates, color ramps blending between tokens, animated opacity with colored overlays, and layer effects like inner shadows. We need to test the conversion pipeline against actual complex animations currently in use to understand where it breaks and what constraints this puts on the design workflow. The risk is that we adopt a workflow that limits what designers can do, only discovering the gaps after committing to it.
