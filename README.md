@@ -210,4 +210,4 @@ Both scripts match colors purely by comparing `[r, g, b]` values against the tok
 
 ### 7. Needs validation with real production animations
 
-The scripts have only been tested with simple test animations (solid fills, basic gradients). Real production Lottie files from designers often use more complex techniques: multi-stop gradients where individual stops are derived shades (not exact token matches), glow/shadow effects using tinted duplicates, color ramps blending between tokens, animated opacity with colored overlays, and layer effects like inner shadows. We need to test the conversion pipeline against actual complex animations currently in use to understand where it breaks and what constraints this puts on the design workflow. The risk is that we adopt a workflow that limits what designers can do, only discovering the gaps after committing to it.
+Need to test with complex lottie animations our animators actually use, in case colors are handled differently than what we expect (like a single color hex with effects applied on top, or if the export actually calculates the color values at gradient stops from effects rather than preserving the original hex).
