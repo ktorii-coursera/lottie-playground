@@ -290,6 +290,8 @@ The answers here determine which approach we take.
    - If yes: plugin approach works cleanly.
    - If no: we need to support arbitrary colors alongside tokens, which complicates the mapping and theming story significantly.
 
+4. **Do animators create new elements directly in After Effects?** The Figma plugin can only tag colors that originate from Figma. Any new shapes, fills, or strokes created directly in AE would have no token mapping in the sidecar. The AE plugin exists to cover this case (animators would use its token palette to apply colors), but this only works if animators actually use it for every color they touch. If someone creates a new shape in AE and picks a color from the regular color picker instead of the token palette, that color is invisible to the theming pipeline and won't get a dark mode variant.
+
 ---
 
 ## Tools
