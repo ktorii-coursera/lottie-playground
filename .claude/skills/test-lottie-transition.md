@@ -6,99 +6,113 @@ user_invocable: true
 
 # Test Lottie Color Transitions
 
-Use **Playwright MCP** tools to visually verify that the intent-token converter produces correct light/dark color transitions.
+Use **Playwright MCP** tools to visually verify that the intent-token converter produces correct light/dark color transitions in the `/v2` playground.
 
 ## Pre-conditions
 
 - `cd web && npm run dev` is running on `localhost:3000`
-- Test Lottie JSON is at `data/comp1.json`
+- Test Lottie JSON is at `data/aftereffects_export_tests/comp1.json` (or served via `web/public/comp1.json`)
 
-## Timing reference (from data/comp1.json)
+## Page controls reference
 
-Animation: 29.97 fps, 150 frames, ~5 seconds per loop.
+The `/v2` page has:
+- **Two players**: Original (left) and Themed (right, defaults to Dark)
+- **Theme dropdown** (`data-testid="theme-toggle"`): only affects the themed player
+- **Shared controls** that operate BOTH players simultaneously:
+  - `data-testid="pause"` — Pause/Play toggle
+  - `data-testid="restart"` — Stop + Play from frame 0
+  - `data-testid="frame-input"` + `data-testid="goto-frame"` — Seek to specific frame
 
-| Time | Seconds | Colors |
+## Key frames for comp1.json
+
+| Frame | Colors (Light) | Colors (Dark) |
 |---|---|---|
-| t=0 | 0.0s | Primary (purple/blue tones) |
-| t=29.97 | 1.0s | Still primary (hold) |
-| t=74.925 | 2.5s | Disabled (grays) |
-| t=120.38 | 4.0s | Back to primary |
-| t=149.35 | 5.0s | Primary (loop end) |
+| 0 | Primary: purple/blue/lavender | Primary: lighter pastels |
+| 30 | Same as 0 (hold) | Same as 0 (hold) |
+| 75 | Disabled: grays (#7E7E7E, #5F5F5F, #434343) | Disabled: lighter grays (#A3A3A3, #868686, #9F9F9F) |
+| 120 | Back to primary | Back to primary |
+| 150 | Same as 0 (loop) | Same as 0 (loop) |
 
-## Steps
+## Test flow
 
-### 1. Setup
-- `mcp__playwright__browser_navigate` to `http://localhost:3000/v2`
-- `mcp__playwright__browser_snapshot` to verify page loaded
+### 1. Setup and Convert
 
-### 2. Input
-- Read `data/comp1.json` from disk using the Read tool
-- `mcp__playwright__browser_fill_form` to paste JSON into the `lottie-input` textarea (find ref via snapshot)
-- Verify tokens textarea is pre-populated with global.json content
+```
+1. mcp__playwright__browser_navigate → http://localhost:3000/v2
+2. Paste comp1.json into lottie-input textarea via browser_evaluate:
+   fetch('/comp1.json').then(r => r.text()).then(t => {
+     const el = document.querySelector('[data-testid="lottie-input"]');
+     const set = Object.getOwnPropertyDescriptor(window.HTMLTextAreaElement.prototype, 'value').set;
+     set.call(el, t); el.dispatchEvent(new Event('input', { bubbles: true }));
+     document.querySelector('[data-testid="convert-btn"]').click();
+   })
+3. browser_wait_for text "Done"
+```
 
-### 3. Convert
-- `mcp__playwright__browser_click` the Convert button (find ref via snapshot)
-- Wait for conversion: `mcp__playwright__browser_snapshot` until convert-status shows "Done"
-- Verify no error messages
+### 2. Test Light theme — Original vs Themed should match
 
-### 4. Test Light theme — Primary colors (t ≈ 0s)
-- Ensure theme-toggle is set to "Light" (default)
-- `mcp__playwright__browser_click` the Restart button on the themed player
-- Wait ~500ms for first frame to render
-- `mcp__playwright__browser_take_screenshot` of the themed player area
-- **Analyze**: Shape should show purple/blue hues
-  - Face ≈ #E7D9FF (light lavender)
-  - Soft shadow ≈ #ADCFFF (light blue)
-  - Hard shadow ≈ #A678F5 (medium purple)
+```
+1. browser_select_option theme-toggle → "light"
+2. Click "Pause" button (data-testid="pause") to freeze both players
+3. Set frame-input to "0", click "Go to frame"
+4. Take screenshot of BOTH players side by side
+5. VERIFY: Original and Themed should look IDENTICAL (same purple/blue colors)
+6. Set frame-input to "75", click "Go to frame"
+7. Take screenshot of BOTH players
+8. VERIFY: Original and Themed should look IDENTICAL (same gray colors)
+```
 
-### 5. Test Light theme — Disabled colors (t ≈ 2.5s)
-- `mcp__playwright__browser_click` Restart again (resets to t=0)
-- Wait ~2500ms (animation reaches the disabled state)
-- `mcp__playwright__browser_take_screenshot`
-- **Analyze**: Shape should show grayscale tones
-  - Face ≈ #7E7E7E (medium gray)
-  - Soft shadow ≈ #5F5F5F (darker gray)
-  - Hard shadow ≈ #434343 (dark gray)
+**Rule: In Light mode, Original and Themed must be visually identical at every frame.**
 
-### 6. Switch to Dark — Primary colors (t ≈ 0s)
-- `mcp__playwright__browser_select_option` to set theme-toggle to "Dark"
-- `mcp__playwright__browser_click` Restart on themed player
-- Wait ~500ms
-- `mcp__playwright__browser_take_screenshot`
-- **Analyze**: Lighter versions of primary colors
-  - Face ≈ #F5EFFF (very light lavender)
-  - Soft shadow ≈ #CFE3FF (light blue)
-  - Hard shadow ≈ #D1B6FF (light purple)
+### 3. Test Dark theme — Themed should differ from Original
 
-### 7. Test Dark — Disabled colors (t ≈ 2.5s)
-- `mcp__playwright__browser_click` Restart again
-- Wait ~2500ms
-- `mcp__playwright__browser_take_screenshot`
-- **Analyze**: Lighter grays than light mode
-  - Face ≈ #A3A3A3 (light gray)
-  - Soft shadow ≈ #868686 (medium gray)
-  - Hard shadow ≈ #9F9F9F (medium-light gray)
+```
+1. browser_select_option theme-toggle → "dark"
+2. Set frame-input to "0", click "Go to frame"
+3. Take screenshot of BOTH players
+4. VERIFY: Themed (right, dark bg) should show LIGHTER/more pastel colors
+   than Original (left, white bg). They should NOT look the same.
+5. Set frame-input to "75", click "Go to frame"
+6. Take screenshot of BOTH players
+7. VERIFY: Both show grays, but Themed grays should be LIGHTER than Original grays.
+   Original: dark grays (#7E7E7E, #5F5F5F, #434343)
+   Themed:  light grays (#A3A3A3, #868686, #9F9F9F)
+```
 
-### 8. Compare with Original
-- `mcp__playwright__browser_click` Restart on original player
-- Wait ~500ms
-- `mcp__playwright__browser_take_screenshot` of original player
-- Compare visually with themed Light screenshot from step 4
+**Rule: In Dark mode, Themed must look visibly different from Original — lighter colors on dark background.**
 
-### 9. Report
-Summarize which color checks passed/failed. If any mismatch, describe expected vs actual.
+### 4. Test color transitions during playback
 
-## Why Restart is critical
+```
+1. Keep theme on "dark"
+2. Click "Restart" to play both from frame 0
+3. Wait ~2.5 seconds (animation reaches disabled state around frame 75)
+4. Click "Pause"
+5. Take screenshot
+6. VERIFY: Original shows dark grays, Themed shows lighter grays
+7. Click "Restart" again
+8. Wait ~0.5 seconds (near frame 0, primary state)
+9. Click "Pause"
+10. Take screenshot
+11. VERIFY: Original shows purple/blue, Themed shows lighter pastels
+```
 
-The animation loops continuously. Without restarting, there's no way to know what frame the animation is on. The "restart → wait → screenshot" pattern ensures precise timing:
-1. Restart resets to frame 0 (t=0)
-2. Wait a known number of seconds to reach the target keyframe
-3. Screenshot captures the expected state
-4. Restart again if re-checking is needed
+### 5. Report
 
-## Color verification
+Summarize results as a table:
+
+| Check | Expected | Result |
+|---|---|---|
+| Light frame 0: Original == Themed | Identical purple/blue | PASS/FAIL |
+| Light frame 75: Original == Themed | Identical grays | PASS/FAIL |
+| Dark frame 0: Original != Themed | Themed lighter pastels | PASS/FAIL |
+| Dark frame 75: Original != Themed | Themed lighter grays | PASS/FAIL |
+| Playback transition visible | Colors change mid-animation | PASS/FAIL |
+
+## Color verification approach
 
 This is a qualitative visual check, not pixel-exact:
-- "Is the shape showing purplish/blue tones?" (primary state)
-- "Is the shape showing gray tones?" (disabled state)
-- "Are dark mode colors lighter than light mode?" (theme check)
+- Compare left (Original) vs right (Themed) players
+- In Light mode: they should be indistinguishable
+- In Dark mode: Themed should be noticeably lighter/more pastel
+- The "Go to frame" + "Pause" pattern is the most reliable way to check specific frames
