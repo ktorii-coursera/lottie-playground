@@ -131,6 +131,12 @@ export function convertWithIntentTokens(
     slots[slotId] = {
       p: { a: 0, k: [...lightRgb] },
     };
+    // Light rule needed so switching Dark → Light restores the light color
+    lightRules.push({
+      id: slotId,
+      type: "Color",
+      value: [...lightRgb],
+    });
     darkRules.push({
       id: slotId,
       type: "Color",

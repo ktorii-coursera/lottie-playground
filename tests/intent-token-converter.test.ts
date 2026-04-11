@@ -119,8 +119,9 @@ describe("convertWithIntentTokens", () => {
       value: [dr, dg, db],
     });
 
-    // No light rules needed for static colors
-    expect(result.lightRules).toHaveLength(0);
+    // Light rule restores color when switching Dark → Light
+    expect(result.lightRules).toHaveLength(1);
+    expect(result.lightRules[0].value).toEqual([lr, lg, lb]);
   });
 
   // Test 2: Static stroke
@@ -382,8 +383,9 @@ describe("convertWithIntentTokens", () => {
     expect(result.darkRules[0].keyframes).toBeUndefined();
     expect(colorsMatch(result.darkRules[0].value, "#D1B6FF")).toBe(true);
 
-    // No light rules for static colors
-    expect(result.lightRules).toHaveLength(0);
+    // Light rule restores color when switching Dark → Light
+    expect(result.lightRules).toHaveLength(1);
+    expect(colorsMatch(result.lightRules[0].value, "#A678F5")).toBe(true);
   });
 
   // Test 10: Unmatched keyframe color preserved as-is
@@ -479,9 +481,10 @@ describe("convertWithIntentTokens", () => {
     expect(result.slots["mat-hard-lit-primary-side-soft-shadow"]).toBeDefined();
     expect(colorsMatch(result.slots["mat-hard-lit-primary-side-soft-shadow"].p.k, "#A678F5")).toBe(true);
 
-    // 1 light rule (animated keyframes for group 3)
-    expect(result.lightRules).toHaveLength(1);
-    const lightKfs = result.lightRules[0].keyframes;
+    // 2 light rules: 1 static (for groups 1,2,4) + 1 animated (for group 3)
+    expect(result.lightRules).toHaveLength(2);
+    const animLight = result.lightRules.find((r: any) => r.keyframes);
+    const lightKfs = animLight.keyframes;
     expect(colorsMatch(lightKfs[0].value, "#7E7E7E")).toBe(true);
     expect(colorsMatch(lightKfs[2].value, "#A678F5")).toBe(true);
 
