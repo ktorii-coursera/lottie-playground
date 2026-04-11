@@ -1,118 +1,120 @@
 ---
 name: test-lottie-transition
-description: Visually QA test Lottie color transitions using Playwright MCP browser automation
+description: E2E regression test for Lottie dark mode theming using Playwright MCP. Tests all files in data/aftereffects_export_tests/.
 user_invocable: true
 ---
 
-# Test Lottie Color Transitions
+# Lottie Theme E2E Regression Test
 
-Use **Playwright MCP** tools to visually verify that the intent-token converter produces correct light/dark color transitions in the `/v2` playground.
+Run visual QA tests on ALL test files using Playwright MCP. This is a regression suite — run it after any change to the converter or playground.
 
 ## Pre-conditions
 
 - `cd web && npm run dev` is running on `localhost:3000`
-- Test Lottie JSON is at `data/aftereffects_export_tests/comp1.json` (or served via `web/public/comp1.json`)
+- Test files served from `web/public/`: `comp1.json`, `fanonecolortest.json`, `fan-transition.json`
+- Also run `npm test` first to verify unit tests pass
 
-## Page controls reference
+## Page controls
 
-The `/v2` page has:
-- **Two players**: Original (left) and Themed (right, defaults to Dark)
-- **Theme dropdown** (`data-testid="theme-toggle"`): only affects the themed player
-- **Shared controls** that operate BOTH players simultaneously:
-  - `data-testid="pause"` — Pause/Play toggle
-  - `data-testid="restart"` — Stop + Play from frame 0
-  - `data-testid="frame-input"` + `data-testid="goto-frame"` — Seek to specific frame
-
-## Key frames for comp1.json
-
-| Frame | Colors (Light) | Colors (Dark) |
+| Element | data-testid | Action |
 |---|---|---|
-| 0 | Primary: purple/blue/lavender | Primary: lighter pastels |
-| 30 | Same as 0 (hold) | Same as 0 (hold) |
-| 75 | Disabled: grays (#7E7E7E, #5F5F5F, #434343) | Disabled: lighter grays (#A3A3A3, #868686, #9F9F9F) |
-| 120 | Back to primary | Back to primary |
-| 150 | Same as 0 (loop) | Same as 0 (loop) |
+| Theme dropdown | `theme-toggle` | `select_option` "light" or "dark" |
+| Pause/Play | `pause` | `click` — freezes both players |
+| Restart | `restart` | `click` — plays from frame 0 |
+| Frame input | `frame-input` | `fill` with frame number |
+| Go to frame | `goto-frame` | `click` — seeks both players |
+| Convert | `convert-btn` | `click` — runs conversion |
 
-## Test flow
+## How to test each file
 
-### 1. Setup and Convert
-
-```
-1. mcp__playwright__browser_navigate → http://localhost:3000/v2
-2. Paste comp1.json into lottie-input textarea via browser_evaluate:
-   fetch('/comp1.json').then(r => r.text()).then(t => {
+For each file:
+1. Navigate to `http://localhost:3000/v2`
+2. Load JSON via `browser_evaluate`:
+   ```js
+   fetch('/FILENAME.json').then(r => r.text()).then(t => {
      const el = document.querySelector('[data-testid="lottie-input"]');
      const set = Object.getOwnPropertyDescriptor(window.HTMLTextAreaElement.prototype, 'value').set;
      set.call(el, t); el.dispatchEvent(new Event('input', { bubbles: true }));
      document.querySelector('[data-testid="convert-btn"]').click();
    })
-3. browser_wait_for text "Done"
-```
+   ```
+3. `browser_wait_for` text "Done"
+4. Run the test matrix for that file (see below)
 
-### 2. Test Light theme — Original vs Themed should match
+For each check:
+1. `select_option` the theme
+2. `click` Pause
+3. `fill` frame-input with the frame number
+4. `click` Go to frame
+5. Wait 0.3s
+6. `take_screenshot`
+7. Analyze: compare Original (left) vs Themed (right)
 
-```
-1. browser_select_option theme-toggle → "light"
-2. Click "Pause" button (data-testid="pause") to freeze both players
-3. Set frame-input to "0", click "Go to frame"
-4. Take screenshot of BOTH players side by side
-5. VERIFY: Original and Themed should look IDENTICAL (same purple/blue colors)
-6. Set frame-input to "75", click "Go to frame"
-7. Take screenshot of BOTH players
-8. VERIFY: Original and Themed should look IDENTICAL (same gray colors)
-```
+---
 
-**Rule: In Light mode, Original and Themed must be visually identical at every frame.**
+## Test Matrix
 
-### 3. Test Dark theme — Themed should differ from Original
+### File 1: `comp1.json` — 3D isometric box with color transitions
 
-```
-1. browser_select_option theme-toggle → "dark"
-2. Set frame-input to "0", click "Go to frame"
-3. Take screenshot of BOTH players
-4. VERIFY: Themed (right, dark bg) should show LIGHTER/more pastel colors
-   than Original (left, white bg). They should NOT look the same.
-5. Set frame-input to "75", click "Go to frame"
-6. Take screenshot of BOTH players
-7. VERIFY: Both show grays, but Themed grays should be LIGHTER than Original grays.
-   Original: dark grays (#7E7E7E, #5F5F5F, #434343)
-   Themed:  light grays (#A3A3A3, #868686, #9F9F9F)
-```
+3 layers, all animated fills transitioning between primary (purple/blue) and disabled (gray) tokens.
 
-**Rule: In Dark mode, Themed must look visibly different from Original — lighter colors on dark background.**
+| # | Theme | Frame | Original (left) | Themed (right) | Check |
+|---|---|---|---|---|---|
+| 1.1 | Light | 0 | Purple/blue/lavender box | Should match Original | SAME |
+| 1.2 | Light | 75 | Gray box | Should match Original | SAME |
+| 1.3 | Dark | 0 | Purple/blue/lavender box | Lighter pastels on dark bg | DIFFERENT (lighter) |
+| 1.4 | Dark | 75 | Gray box | Lighter grays on dark bg | DIFFERENT (lighter) |
+| 1.5 | Dark→Light | 0 | Purple/blue box | Should match Original again | SAME (no stuck dark) |
 
-### 4. Test color transitions during playback
+### File 2: `fanonecolortest.json` — spinning fan, all static fills
 
-```
-1. Keep theme on "dark"
-2. Click "Restart" to play both from frame 0
-3. Wait ~2.5 seconds (animation reaches disabled state around frame 75)
-4. Click "Pause"
-5. Take screenshot
-6. VERIFY: Original shows dark grays, Themed shows lighter grays
-7. Click "Restart" again
-8. Wait ~0.5 seconds (near frame 0, primary state)
-9. Click "Pause"
-10. Take screenshot
-11. VERIFY: Original shows purple/blue, Themed shows lighter pastels
-```
+1 layer, 4 static fills all #A678F5. No color transitions.
 
-### 5. Report
+| # | Theme | Frame | Original (left) | Themed (right) | Check |
+|---|---|---|---|---|---|
+| 2.1 | Light | 0 | Purple fan | Should match Original | SAME |
+| 2.2 | Dark | 0 | Purple fan | Lighter purple fan on dark bg | DIFFERENT (lighter) |
+| 2.3 | Dark→Light | 0 | Purple fan | Should match Original again | SAME (no stuck dark) |
 
-Summarize results as a table:
+### File 3: `fan-transition.json` — spinning fan, mixed static + animated
 
-| Check | Expected | Result |
+1 layer, 3 static fills + 1 animated fill (transitions #7E7E7E → #A678F5 with opacity 0→100%).
+
+| # | Theme | Frame | Original (left) | Themed (right) | Check |
+|---|---|---|---|---|---|
+| 3.1 | Light | 0 | 3 purple blades, 1 invisible (opacity 0) | Should match Original | SAME |
+| 3.2 | Light | 60 | 4 purple blades (all visible) | Should match Original | SAME |
+| 3.3 | Dark | 0 | 3 purple + 1 invisible | 3 lighter purple + 1 invisible on dark bg | DIFFERENT (lighter) |
+| 3.4 | Dark | 60 | 4 purple blades | 4 lighter purple on dark bg | DIFFERENT (lighter) |
+| 3.5 | Dark→Light | 0 | 3 purple + 1 invisible | All 4 blades match Original (no stuck dark) | SAME |
+| 3.6 | Light | 30 | Transition mid-point: blade fading in | Should match Original | SAME |
+
+---
+
+## Result template
+
+After running all tests, report:
+
+| Test | Expected | Result |
 |---|---|---|
-| Light frame 0: Original == Themed | Identical purple/blue | PASS/FAIL |
-| Light frame 75: Original == Themed | Identical grays | PASS/FAIL |
-| Dark frame 0: Original != Themed | Themed lighter pastels | PASS/FAIL |
-| Dark frame 75: Original != Themed | Themed lighter grays | PASS/FAIL |
-| Playback transition visible | Colors change mid-animation | PASS/FAIL |
+| 1.1 comp1 Light f0 | Original == Themed | PASS/FAIL |
+| 1.2 comp1 Light f75 | Original == Themed | PASS/FAIL |
+| 1.3 comp1 Dark f0 | Themed lighter | PASS/FAIL |
+| 1.4 comp1 Dark f75 | Themed lighter grays | PASS/FAIL |
+| 1.5 comp1 Dark→Light f0 | Restored to light | PASS/FAIL |
+| 2.1 fan Light f0 | Original == Themed | PASS/FAIL |
+| 2.2 fan Dark f0 | Themed lighter | PASS/FAIL |
+| 2.3 fan Dark→Light f0 | Restored to light | PASS/FAIL |
+| 3.1 mixed Light f0 | Original == Themed | PASS/FAIL |
+| 3.2 mixed Light f60 | Original == Themed | PASS/FAIL |
+| 3.3 mixed Dark f0 | Themed lighter | PASS/FAIL |
+| 3.4 mixed Dark f60 | Themed lighter | PASS/FAIL |
+| 3.5 mixed Dark→Light f0 | Restored to light | PASS/FAIL |
+| 3.6 mixed Light f30 | Transition matches | PASS/FAIL |
 
 ## Color verification approach
 
 This is a qualitative visual check, not pixel-exact:
-- Compare left (Original) vs right (Themed) players
-- In Light mode: they should be indistinguishable
-- In Dark mode: Themed should be noticeably lighter/more pastel
-- The "Go to frame" + "Pause" pattern is the most reliable way to check specific frames
+- **SAME**: Left and right players should be visually indistinguishable
+- **DIFFERENT (lighter)**: Themed player should show noticeably lighter/more pastel colors on dark background
+- **No stuck dark**: After switching Dark→Light, all fills should return to original light colors (the bug we fixed with light rules for static fills)
