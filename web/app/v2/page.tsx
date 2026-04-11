@@ -53,7 +53,6 @@ export default function V2Page() {
   const [pauseLabel, setPauseLabel] = useState("Pause");
   const pausedRef = useRef(false);
   const [frameInput, setFrameInput] = useState("0");
-  const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Refs to both dotLottie instances
   const originalRef = useRef<DotLottie | null>(null);
@@ -142,7 +141,9 @@ export default function V2Page() {
   }
 
   // Memoize ArrayBuffers so DotLottieReact doesn't remount on every render
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   const originalData = useMemo(() => result ? base64ToArrayBuffer(result.original) : null, [result?.original]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   const themedData = useMemo(() => result ? base64ToArrayBuffer(result.themed) : null, [result?.themed]);
 
   const btnClass = "px-3 py-1.5 text-sm border rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors border-gray-300 dark:border-gray-700";

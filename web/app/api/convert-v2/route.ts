@@ -3,7 +3,7 @@ import { DotLottie } from "@dotlottie/dotlottie-js";
 import {
   convertWithIntentTokens,
   ThemeTokens,
-} from "../../../../lib/intent-token-converter";
+} from "@/app/lib/intent-token-converter";
 
 export const maxDuration = 30;
 
