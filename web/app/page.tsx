@@ -2,12 +2,16 @@
 
 import { DotLottieReact } from "@lottiefiles/dotlottie-react";
 import type { DotLottie } from "@lottiefiles/dotlottie-react";
-import { useState, useRef, useCallback } from "react";
+import { useState, useRef, useCallback, useEffect, useMemo } from "react";
 
 const DEFAULT_TOKENS = JSON.stringify(
   {
-    "cds-stroke-hard": { light: "#003872", dark: "#7EB6FF" },
-    "cds-fill-interactive-hard": { light: "#d52c2c", dark: "#FF6B6B" },
+    "mat-hard-lit-primary-side-face": { light: "#E7D9FF", dark: "#F5EFFF" },
+    "mat-hard-lit-primary-side-soft-shadow": { light: "#A678F5", dark: "#D1B6FF" },
+    "mat-hard-lit-primary-side-hard-shadow": { light: "#ADCFFF", dark: "#CFE3FF" },
+    "side-face-disabled-strong": { light: "#7E7E7E", dark: "#A3A3A3" },
+    "side-soft-shadow-disabled-strong": { light: "#5F5F5F", dark: "#868686" },
+    "side-hard-shadow-disabled-strong": { light: "#434343", dark: "#9F9F9F" },
   },
   null,
   2
@@ -29,111 +33,69 @@ function base64ToArrayBuffer(base64: string): ArrayBuffer {
   return bytes.buffer;
 }
 
-function downloadBase64(base64: string, filename: string) {
-  const blob = new Blob([new Uint8Array(base64ToArrayBuffer(base64))], {
-    type: "application/octet-stream",
-  });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement("a");
-  a.href = url;
-  a.download = filename;
-  a.click();
-  URL.revokeObjectURL(url);
-}
-
 type Theme = "light" | "dark";
-
-function ThemedLottiePreview({ data }: { data: ArrayBuffer }) {
-  const [theme, setTheme] = useState<Theme>("dark");
-  const [dotLottie, setDotLottie] = useState<DotLottie | null>(null);
-
-  const handleRef = useCallback(
-    (instance: DotLottie | null) => {
-      setDotLottie(instance);
-      if (instance) {
-        // Theme can only be applied after the file is loaded
-        const applyTheme = () => {
-          if (theme === "dark") {
-            instance.setTheme("Dark");
-          } else {
-            instance.resetTheme();
-          }
-        };
-        instance.addEventListener("load", applyTheme);
-      }
-    },
-    [theme]
-  );
-
-  const handleThemeChange = useCallback(
-    (e: React.ChangeEvent<HTMLSelectElement>) => {
-      const newTheme = e.target.value as Theme;
-      setTheme(newTheme);
-      if (dotLottie) {
-        if (newTheme === "dark") {
-          dotLottie.setTheme("Dark");
-        } else {
-          dotLottie.resetTheme();
-        }
-      }
-    },
-    [dotLottie]
-  );
-
-  return (
-    <div className="flex flex-col items-center gap-2">
-      <p className="text-sm font-medium">Themed (single .lottie with slots)</p>
-      <select
-        value={theme}
-        onChange={handleThemeChange}
-        className="px-3 py-1.5 border rounded-lg text-sm bg-white dark:bg-gray-900 border-gray-300 dark:border-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
-      >
-        <option value="light">Light</option>
-        <option value="dark">Dark</option>
-      </select>
-      <div
-        className={`w-full aspect-square rounded-lg border overflow-hidden ${
-          theme === "dark"
-            ? "bg-gray-900 border-gray-700"
-            : "bg-white border-gray-300"
-        }`}
-      >
-        <DotLottieReact
-          data={data}
-          autoplay
-          loop
-          themeId={theme === "dark" ? "Dark" : ""}
-          dotLottieRefCallback={handleRef}
-        />
-      </div>
-    </div>
-  );
-}
+type ConvertMethod = "layer-name" | "bracket-tokens";
 
 export default function Home() {
   const [tokensText, setTokensText] = useState(DEFAULT_TOKENS);
-  const [lottieJson, setLottieJson] = useState<any>(null);
-  const [fileName, setFileName] = useState<string>("");
+  const [lottieText, setLottieText] = useState("");
   const [result, setResult] = useState<ConvertResult | null>(null);
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string>("");
-  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [error, setError] = useState("");
+  const [status, setStatus] = useState<"idle" | "converting" | "done">("idle");
+  const [themedTheme, setThemedTheme] = useState<Theme>("dark");
+  const [pauseLabel, setPauseLabel] = useState("Pause");
+  const pausedRef = useRef(false);
+  const [frameInput, setFrameInput] = useState("0");
+  const [convertMethod, setConvertMethod] = useState<ConvertMethod>("bracket-tokens");
+
+  // Refs to both dotLottie instances
+  const originalRef = useRef<DotLottie | null>(null);
+  const themedRef = useRef<DotLottie | null>(null);
+
+  const handleOriginalRef = useCallback((instance: DotLottie | null) => {
+    if (instance) originalRef.current = instance;
+  }, []);
+
+  const handleThemedRef = useCallback((instance: DotLottie | null) => {
+    if (instance) {
+      themedRef.current = instance;
+      instance.addEventListener("load", () => {
+        instance.setTheme(themedTheme === "dark" ? "Dark" : "Light");
+      });
+    }
+  }, [themedTheme]);
+
+  // Apply theme on themed player
+  useEffect(() => {
+    const dl = themedRef.current;
+    if (!dl) return;
+    dl.setTheme(themedTheme === "dark" ? "Dark" : "Light");
+  }, [themedTheme]);
+
+  // --- Shared controls (operate both players) ---
+  function both(fn: (dl: DotLottie) => void) {
+    if (originalRef.current) fn(originalRef.current);
+    if (themedRef.current) fn(themedRef.current);
+  }
+
+  function handleRestart() { both(dl => { dl.stop(); dl.play(); }); pausedRef.current = false; setPauseLabel("Pause"); }
+  function handlePause() {
+    if (pausedRef.current) { both(dl => dl.play()); pausedRef.current = false; setPauseLabel("Pause"); }
+    else { both(dl => dl.pause()); pausedRef.current = true; setPauseLabel("Play"); }
+  }
+  function handleGoToFrame() {
+    const frame = parseFloat(frameInput);
+    if (!isNaN(frame)) both(dl => dl.setFrame(frame));
+  }
 
   function handleFileUpload(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
     if (!file) return;
-
-    setFileName(file.name);
     const reader = new FileReader();
     reader.onload = (event) => {
-      try {
-        const json = JSON.parse(event.target?.result as string);
-        setLottieJson(json);
-        setError("");
-      } catch {
-        setError("Invalid JSON file");
-        setLottieJson(null);
-      }
+      setLottieText(event.target?.result as string);
+      setError("");
     };
     reader.readAsText(file);
   }
@@ -141,218 +103,185 @@ export default function Home() {
   async function handleConvert() {
     setError("");
     setResult(null);
+    setStatus("converting");
 
     let tokens;
-    try {
-      tokens = JSON.parse(tokensText);
-    } catch {
-      setError("Invalid tokens JSON");
-      return;
-    }
+    try { tokens = JSON.parse(tokensText); }
+    catch { setError("Invalid tokens JSON"); setStatus("idle"); return; }
 
-    if (!lottieJson) {
-      setError("Please upload a Lottie JSON file first");
-      return;
-    }
+    let lottieJson;
+    try { lottieJson = JSON.parse(lottieText); }
+    catch { setError("Invalid Lottie JSON"); setStatus("idle"); return; }
 
     setLoading(true);
     try {
       const res = await fetch("/api/convert", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ lottieJson, tokens }),
+        body: JSON.stringify({ lottieJson, tokens, method: convertMethod }),
       });
-
       if (!res.ok) {
         const body = await res.json();
         throw new Error(body.error || "Conversion failed");
       }
-
       const data: ConvertResult = await res.json();
       setResult(data);
+      setStatus("done");
     } catch (err: any) {
       setError(err.message || "Something went wrong");
+      setStatus("idle");
     } finally {
       setLoading(false);
     }
   }
 
-  const baseName = fileName.replace(/\.json$/i, "") || "animation";
+  // Memoize ArrayBuffers so DotLottieReact doesn't remount on every render
+  const originalData = useMemo(() => result ? base64ToArrayBuffer(result.light) : null, [result?.light]);
+  const themedData = useMemo(() => result ? base64ToArrayBuffer(result.themed) : null, [result?.themed]);
+
+  const btnClass = "px-3 py-1.5 text-sm border rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors border-gray-300 dark:border-gray-700";
 
   return (
-    <main className="min-h-screen p-6 md:p-12 max-w-7xl mx-auto">
+    <main className="min-h-screen p-6 md:p-12 max-w-6xl mx-auto">
       <h1 className="text-3xl font-bold mb-2">Lottie Theme Playground</h1>
       <p className="text-sm text-gray-500 mb-8">
-        Upload a light-mode Lottie JSON and theme tokens to generate light,
-        dark, and themed .lottie files.
+        Upload a Lottie JSON and theme tokens to preview light/dark theming.
       </p>
 
-      <div className="grid md:grid-cols-2 gap-6 mb-8">
-        {/* Tokens editor */}
+      <div className="grid md:grid-cols-2 gap-6 mb-6">
         <div>
-          <label className="block text-sm font-medium mb-2">
-            Theme Tokens JSON
-          </label>
+          <label className="block text-sm font-medium mb-2">Tokens JSON</label>
           <textarea
-            className="w-full h-64 p-3 border rounded-lg font-mono text-sm bg-gray-50 dark:bg-gray-900 border-gray-300 dark:border-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500 resize-y"
+            data-testid="tokens-input"
+            className="w-full h-64 p-3 border rounded-lg font-mono text-xs bg-gray-50 dark:bg-gray-900 border-gray-300 dark:border-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500 resize-y"
             value={tokensText}
             onChange={(e) => setTokensText(e.target.value)}
             spellCheck={false}
           />
-          <p className="text-xs text-gray-400 mt-1">
-            Format: {"{"} &quot;token-name&quot;: {"{"} &quot;light&quot;:
-            &quot;#hex&quot;, &quot;dark&quot;: &quot;#hex&quot; {"}"} {"}"}
-          </p>
         </div>
-
-        {/* File upload */}
         <div>
-          <label className="block text-sm font-medium mb-2">
-            Light Lottie JSON
-          </label>
-          <div
-            className="h-64 border-2 border-dashed rounded-lg flex flex-col items-center justify-center cursor-pointer hover:border-blue-400 transition-colors border-gray-300 dark:border-gray-700"
-            onClick={() => fileInputRef.current?.click()}
-          >
-            <input
-              ref={fileInputRef}
-              type="file"
-              accept=".json"
-              onChange={handleFileUpload}
-              className="hidden"
-            />
-            {fileName ? (
-              <div className="text-center">
-                <p className="text-lg mb-1">{fileName}</p>
-                <p className="text-sm text-green-600 dark:text-green-400">
-                  Loaded successfully
-                </p>
-                <p className="text-xs text-gray-400 mt-2">
-                  Click to change file
-                </p>
-              </div>
-            ) : (
-              <div className="text-center text-gray-400">
-                <svg
-                  className="w-12 h-12 mx-auto mb-3"
-                  fill="none"
-                  stroke="currentColor"
-                  viewBox="0 0 24 24"
-                >
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth={1.5}
-                    d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"
-                  />
-                </svg>
-                <p className="text-sm">Click to upload Lottie JSON</p>
-              </div>
-            )}
+          <div className="flex items-center gap-2 mb-2">
+            <span className="text-sm font-medium">Lottie JSON</span>
           </div>
+          <input type="file" accept=".json" onChange={handleFileUpload} className="mb-2 text-sm" />
+          <textarea
+            data-testid="lottie-input"
+            className="w-full h-64 p-3 border rounded-lg font-mono text-xs bg-gray-50 dark:bg-gray-900 border-gray-300 dark:border-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500 resize-y"
+            value={lottieText}
+            onChange={(e) => setLottieText(e.target.value)}
+            placeholder="Paste Lottie JSON here..."
+            spellCheck={false}
+          />
         </div>
       </div>
 
-      {/* Convert button */}
-      <button
-        onClick={handleConvert}
-        disabled={loading}
-        className="w-full md:w-auto px-8 py-3 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-400 text-white font-medium rounded-lg transition-colors"
-      >
-        {loading ? "Converting..." : "Convert"}
-      </button>
+      <div className="flex flex-wrap items-center gap-4 mb-2">
+        <div className="flex items-center gap-2">
+          <label className="text-sm font-medium">Method:</label>
+          <select
+            data-testid="method-toggle"
+            value={convertMethod}
+            onChange={(e) => setConvertMethod(e.target.value as ConvertMethod)}
+            className="px-3 py-2 border rounded-lg text-sm bg-white dark:bg-gray-900 border-gray-300 dark:border-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
+          >
+            <option value="bracket-tokens">Bracket tokens (v3)</option>
+            <option value="layer-name">Layer-name (v1)</option>
+          </select>
+        </div>
+        <button data-testid="convert-btn" onClick={handleConvert} disabled={loading}
+          className="px-8 py-2.5 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-400 text-white font-medium rounded-lg transition-colors">
+          {loading ? "Converting..." : "Convert"}
+        </button>
+        <span data-testid="convert-status" className="text-sm text-gray-500">
+          {status === "converting" ? "Converting..." : status === "done" ? "Done" : ""}
+        </span>
+      </div>
+      <p className="text-xs text-gray-400 mb-6">
+        {convertMethod === "bracket-tokens"
+          ? "Reads intent tokens from layer name brackets, e.g. \"lit [token-name]\"."
+          : "Matches layer names against token keys, replaces colors globally."}
+      </p>
 
-      {/* Error */}
       {error && (
-        <div className="mt-4 p-4 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg text-red-700 dark:text-red-400 text-sm">
+        <div className="mb-6 p-4 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg text-red-700 dark:text-red-400 text-sm">
           {error}
         </div>
       )}
 
-      {/* Results */}
       {result && (
-        <div className="mt-8">
-          {/* Preview players */}
+        <div className="mb-8">
           <h2 className="text-xl font-semibold mb-4">Preview</h2>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
-            {/* Light */}
+
+          {/* Players side by side */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-8 mb-4">
+            {/* Original */}
             <div className="flex flex-col items-center gap-2">
-              <p className="text-sm font-medium">Light</p>
-              <div className="w-full aspect-square rounded-lg border overflow-hidden bg-white border-gray-300">
-                <DotLottieReact
-                  data={base64ToArrayBuffer(result.light)}
-                  autoplay
-                  loop
-                />
+              <p className="text-sm font-medium">Original</p>
+              <div data-testid="player-original" className="w-full aspect-square rounded-lg border overflow-hidden bg-white border-gray-300">
+                <DotLottieReact data={originalData!} autoplay loop dotLottieRefCallback={handleOriginalRef} />
               </div>
             </div>
 
-            {/* Dark */}
+            {/* Themed */}
             <div className="flex flex-col items-center gap-2">
-              <p className="text-sm font-medium">Dark (file swap)</p>
-              <div className="w-full aspect-square rounded-lg border overflow-hidden bg-gray-900 border-gray-700">
-                <DotLottieReact
-                  data={base64ToArrayBuffer(result.dark)}
-                  autoplay
-                  loop
-                />
+              <div className="flex items-center gap-3">
+                <p className="text-sm font-medium">Themed</p>
+                <select
+                  data-testid="theme-toggle"
+                  value={themedTheme}
+                  onChange={(e) => setThemedTheme(e.target.value as Theme)}
+                  className="px-2 py-1 border rounded text-sm bg-white dark:bg-gray-900 border-gray-300 dark:border-gray-700"
+                >
+                  <option value="light">Light</option>
+                  <option value="dark">Dark</option>
+                </select>
+              </div>
+              <div data-testid="player-themed"
+                className={`w-full aspect-square rounded-lg border overflow-hidden ${themedTheme === "dark" ? "bg-[#111111] border-gray-800" : "bg-white border-gray-300"}`}>
+                <DotLottieReact data={themedData!} autoplay loop dotLottieRefCallback={handleThemedRef} />
               </div>
             </div>
+          </div>
 
-            {/* Themed with its own dropdown */}
-            <ThemedLottiePreview
-              data={base64ToArrayBuffer(result.themed)}
+          {/* Shared controls */}
+          <div className="flex items-center justify-center gap-3 mb-2">
+            <button data-testid="restart" onClick={handleRestart} className={btnClass}>Restart</button>
+            <button data-testid="pause" onClick={handlePause} className={btnClass}>{pauseLabel}</button>
+          </div>
+          <div className="flex items-center justify-center gap-2">
+            <input
+              data-testid="frame-input"
+              type="number"
+              value={frameInput}
+              onChange={(e) => setFrameInput(e.target.value)}
+              className="w-20 px-2 py-1 text-sm border rounded bg-white dark:bg-gray-900 border-gray-300 dark:border-gray-700 text-center"
+              placeholder="Frame"
             />
+            <button data-testid="goto-frame" onClick={handleGoToFrame} className={btnClass}>Go to frame</button>
           </div>
-
-          {/* Downloads */}
-          <h2 className="text-xl font-semibold mb-4">Downloads</h2>
-          <div className="grid sm:grid-cols-3 gap-4 mb-6">
-            <button
-              onClick={() =>
-                downloadBase64(result.light, `${baseName}-light.lottie`)
-              }
-              className="p-4 border rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors text-left border-gray-200 dark:border-gray-700"
-            >
-              <p className="font-medium">light.lottie</p>
-              <p className="text-sm text-gray-500">
-                Original light-mode animation
-              </p>
-            </button>
-            <button
-              onClick={() =>
-                downloadBase64(result.dark, `${baseName}-dark.lottie`)
-              }
-              className="p-4 border rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors text-left border-gray-200 dark:border-gray-700"
-            >
-              <p className="font-medium">dark.lottie</p>
-              <p className="text-sm text-gray-500">
-                Color-swapped dark-mode animation
-              </p>
-            </button>
-            <button
-              onClick={() =>
-                downloadBase64(result.themed, `${baseName}-themed.lottie`)
-              }
-              className="p-4 border rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors text-left border-gray-200 dark:border-gray-700"
-            >
-              <p className="font-medium">themed.lottie</p>
-              <p className="text-sm text-gray-500">
-                Slotted with light + dark theme
-              </p>
-            </button>
-          </div>
-
-          {/* Logs */}
-          <details className="mb-8">
-            <summary className="cursor-pointer text-sm text-gray-500 hover:text-gray-700 dark:hover:text-gray-300">
-              Conversion logs ({result.logs.length})
-            </summary>
-            <pre className="mt-2 p-4 bg-gray-50 dark:bg-gray-900 rounded-lg text-xs overflow-x-auto max-h-64 overflow-y-auto border border-gray-200 dark:border-gray-700">
-              {result.logs.join("\n")}
-            </pre>
-          </details>
         </div>
+      )}
+
+      {/* Downloads */}
+      {result && (
+        <div className="mb-6 flex gap-4">
+          <button onClick={() => {
+            const blob = new Blob([new Uint8Array(base64ToArrayBuffer(result.themed))], { type: "application/octet-stream" });
+            const a = document.createElement("a"); a.href = URL.createObjectURL(blob); a.download = "themed.lottie"; a.click();
+          }} className={btnClass}>Download .lottie</button>
+        </div>
+      )}
+
+      {/* Logs */}
+      {result && (
+        <details className="mb-8">
+          <summary className="cursor-pointer text-sm text-gray-500 hover:text-gray-700 dark:hover:text-gray-300">
+            Conversion logs ({result.logs.length})
+          </summary>
+          <pre className="mt-2 p-4 bg-gray-50 dark:bg-gray-900 rounded-lg text-xs overflow-x-auto max-h-64 overflow-y-auto border border-gray-200 dark:border-gray-700">
+            {result.logs.join("\n")}
+          </pre>
+        </details>
       )}
     </main>
   );
