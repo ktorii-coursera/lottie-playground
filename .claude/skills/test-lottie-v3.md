@@ -11,7 +11,7 @@ Run visual QA tests on v3 bracket-token test files using Playwright MCP. This is
 ## Pre-conditions
 
 - `cd web && npm run dev` is running on `localhost:3000`
-- Test files served from `web/public/`: `goupanddown.json`, `goupanddown-transition.json`, `tokens.json`
+- Test files served from `web/public/`: `goupanddown.json`, `goupanddown-transition.json`, `gradient-only.json`, `tokens.json`
 - Also run `npm test` first to verify unit tests pass
 
 ## Page controls
@@ -91,6 +91,20 @@ Keyframe timing: colored at t=0, holds to ~t=49, gray at ~t=74, back to colored 
 | 2.5 | Dark→Light | 0 | Colored box | Should match Original again | SAME (no stuck dark) |
 | 2.6 | Light | 50 | Transition mid-point: colors shifting | Should match Original | SAME |
 
+### File 3: `gradient-only.json` — Gradient fill, 2 stops mapped to tokens
+
+1 layer with a gradient fill (`ty: "gf"`) containing 2 color stops:
+- Stop 0: `mat-hard-lit-primary-side-face` (#E7D9FF light → #F5EFFF dark)
+- Stop 1: `mat-hard-lit-primary-side-soft-shadow` (#A678F5 light → #D1B6FF dark)
+
+No animation on the gradient colors — just a static linear gradient. The layer has animated start/end points but the colors are static.
+
+| # | Theme | Frame | Original (left) | Themed (right) | Check |
+|---|---|---|---|---|---|
+| 3.1 | Light | 0 | Purple gradient (lavender → purple) | Should match Original | SAME |
+| 3.2 | Dark | 0 | Purple gradient | Lighter pastels on dark bg | DIFFERENT (lighter) |
+| 3.3 | Dark→Light | 0 | Purple gradient | Should match Original again | SAME (no stuck dark) |
+
 ---
 
 ## Result template
@@ -110,6 +124,9 @@ After running all tests, report:
 | 2.4 transition Dark f74 | Themed lighter grays | PASS/FAIL |
 | 2.5 transition Dark→Light f0 | Restored to light | PASS/FAIL |
 | 2.6 transition Light f50 | Transition matches | PASS/FAIL |
+| 3.1 gradient Light f0 | Original == Themed | PASS/FAIL |
+| 3.2 gradient Dark f0 | Themed lighter gradient | PASS/FAIL |
+| 3.3 gradient Dark→Light f0 | Restored to light | PASS/FAIL |
 
 ## Color verification approach
 

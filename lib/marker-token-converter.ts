@@ -124,19 +124,7 @@ export function convertWithMarkerTokens(
   const darkRules: any[] = [];
   const registeredSlots = new Set<string>();
   let transitionCounter = 0;
-
-  function hexMatchColor(
-    rgb: number[],
-    lookup: Map<string, TokenLookupEntry>
-  ): TokenLookupEntry | null {
-    for (const [, entry] of lookup) {
-      if (colorsMatch(rgb, "#" + [entry.lightRgb[0], entry.lightRgb[1], entry.lightRgb[2]]
-        .map(c => Math.round(c * 255).toString(16).padStart(2, "0")).join(""))) {
-        return entry;
-      }
-    }
-    return null;
-  }
+  let gradientSlotCounter = 0;
 
   /** Match a color against only the specific tokens listed in the marker. */
   function matchAgainstMarkerTokens(
@@ -288,6 +276,81 @@ export function convertWithMarkerTokens(
     }
   }
 
+  function processGradient(
+    shape: any,
+    layerName: string,
+    markerTokenNames: string[]
+  ) {
+    const gradient = shape.g;
+    const numStops = gradient.p;
+    const colorData = gradient.k;
+
+    if (colorData.a !== 0 || !Array.isArray(colorData.k)) return;
+
+    const k = colorData.k;
+    let hasMatch = false;
+    const lightStops: any[] = [];
+    const darkStops: any[] = [];
+
+    for (let i = 0; i < numStops; i++) {
+      const base = i * 4;
+      if (base + 3 >= k.length) break;
+      const offset = k[base];
+      const r = k[base + 1];
+      const g = k[base + 2];
+      const b = k[base + 3];
+
+      const alphaBase = numStops * 4 + i * 2;
+      const alpha = alphaBase + 1 < k.length ? k[alphaBase + 1] : 1;
+
+      const match = matchAgainstMarkerTokens([r, g, b], markerTokenNames);
+      if (match) {
+        hasMatch = true;
+        lightStops.push({ offset, color: [...match.lightRgb, alpha] });
+        darkStops.push({ offset, color: [...match.darkRgb, alpha] });
+        logs.push(
+          `Gradient stop ${i}: ${rgbToHex(r, g, b)} → "${match.tokenName}"`
+        );
+      } else {
+        lightStops.push({ offset, color: [r, g, b, alpha] });
+        darkStops.push({ offset, color: [r, g, b, alpha] });
+      }
+    }
+
+    if (!hasMatch) return;
+
+    gradientSlotCounter++;
+    const slotId = `gradient-${gradientSlotCounter}`;
+    colorData.sid = slotId;
+
+    if (!registeredSlots.has(slotId)) {
+      registeredSlots.add(slotId);
+
+      slots[slotId] = {
+        p: {
+          k: { a: 0, k: [...k] },
+          p: numStops,
+        },
+      };
+
+      lightRules.push({
+        id: slotId,
+        type: "Gradient",
+        value: lightStops,
+      });
+
+      darkRules.push({
+        id: slotId,
+        type: "Gradient",
+        value: darkStops,
+      });
+    }
+
+    logs.push(
+      `Matched gradient → slot "${slotId}" (${numStops} stops)`
+    );
+  }
+
   function walkShapes(
     shapes: any[],
     layerName: string,
@@ -303,6 +366,8 @@ export function convertWithMarkerTokens(
         if (shape.o) {
           processAlpha(shape.o, layerName, markerTokenNames);
         }
+      } else if ((shape.ty === "gf" || shape.ty === "gs") && shape.g && shape.g.p && shape.g.k) {
+        processGradient(shape, layerName, markerTokenNames);
       }
     }
   }

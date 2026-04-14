@@ -366,7 +366,114 @@ describe("convertWithMarkerTokens", () => {
     expect(result.slots["nested-token"]).toBeDefined();
   });
 
-  // Test 10: Animated stroke with marker
+  // Test 10: Static gradient fill with marker
+  it("adds sid and gradient slot for a static gradient fill when marker lists matching tokens", () => {
+    const tokens: ThemeTokens = {
+      "grad-stop-a": { light: "#E7D9FF", dark: "#F5EFFF" },
+      "grad-stop-b": { light: "#A678F5", dark: "#D1B6FF" },
+    };
+
+    const [ar, ag, ab] = hexToRgb01("#E7D9FF");
+    const [br, bg, bb] = hexToRgb01("#A678F5");
+
+    const gradientFill = {
+      ty: "gf",
+      nm: "Gradient Fill",
+      g: {
+        p: 2,
+        k: {
+          a: 0,
+          k: [0, ar, ag, ab, 1, br, bg, bb],
+        },
+      },
+      s: { a: 0, k: [0, 0] },
+      e: { a: 0, k: [100, 0] },
+      t: 1,
+      r: 1,
+      o: { a: 0, k: 100 },
+    };
+
+    const layer = makeShapeLayer(
+      "Gradient Shape",
+      [gradientFill],
+      ["grad-stop-a", "grad-stop-b"]
+    );
+
+    const lottie = makeLottie([], [layer]);
+    const result = convertWithMarkerTokens(lottie, tokens);
+
+    // sid assigned to gradient color data
+    const grad = result.data.layers[0].shapes[0];
+    expect(grad.g.k.sid).toBe("gradient-1");
+
+    // slot registered
+    expect(result.slots["gradient-1"]).toBeDefined();
+    expect(result.slots["gradient-1"].p.p).toBe(2);
+
+    // light rule has correct stops
+    const lightRule = result.lightRules.find((r: any) => r.id === "gradient-1");
+    expect(lightRule.type).toBe("Gradient");
+    expect(lightRule.value).toHaveLength(2);
+    expect(lightRule.value[0].offset).toBe(0);
+    expect(colorsMatch(lightRule.value[0].color, "#E7D9FF")).toBe(true);
+    expect(lightRule.value[1].offset).toBe(1);
+    expect(colorsMatch(lightRule.value[1].color, "#A678F5")).toBe(true);
+
+    // dark rule has correct stops
+    const darkRule = result.darkRules.find((r: any) => r.id === "gradient-1");
+    expect(darkRule.type).toBe("Gradient");
+    expect(darkRule.value).toHaveLength(2);
+    expect(colorsMatch(darkRule.value[0].color, "#F5EFFF")).toBe(true);
+    expect(colorsMatch(darkRule.value[1].color, "#D1B6FF")).toBe(true);
+  });
+
+  // Test 11: Gradient with partial token match (one stop matches, one doesn't)
+  it("handles gradient where only some stops match tokens", () => {
+    const tokens: ThemeTokens = {
+      "only-stop-a": { light: "#E7D9FF", dark: "#F5EFFF" },
+    };
+
+    const [ar, ag, ab] = hexToRgb01("#E7D9FF");
+
+    const gradientFill = {
+      ty: "gf",
+      nm: "Gradient Fill",
+      g: {
+        p: 2,
+        k: {
+          a: 0,
+          k: [0, ar, ag, ab, 1, 0.5, 0.5, 0.5], // second stop doesn't match
+        },
+      },
+      s: { a: 0, k: [0, 0] },
+      e: { a: 0, k: [100, 0] },
+      t: 1,
+      r: 1,
+      o: { a: 0, k: 100 },
+    };
+
+    const layer = makeShapeLayer(
+      "Partial Gradient",
+      [gradientFill],
+      ["only-stop-a"]
+    );
+
+    const lottie = makeLottie([], [layer]);
+    const result = convertWithMarkerTokens(lottie, tokens);
+
+    // Should still create a slot because at least one stop matched
+    expect(result.slots["gradient-1"]).toBeDefined();
+
+    const darkRule = result.darkRules.find((r: any) => r.id === "gradient-1");
+    // First stop swapped to dark
+    expect(colorsMatch(darkRule.value[0].color, "#F5EFFF")).toBe(true);
+    // Second stop unchanged
+    expect(darkRule.value[1].color[0]).toBeCloseTo(0.5);
+    expect(darkRule.value[1].color[1]).toBeCloseTo(0.5);
+    expect(darkRule.value[1].color[2]).toBeCloseTo(0.5);
+  });
+
+  // Test 12: Animated stroke with marker
   it("handles animated stroke: flattens to static, produces light+dark keyframes", () => {
     const tokens: ThemeTokens = {
       "stroke-a": { light: "#FF0000", dark: "#00FF00" },
