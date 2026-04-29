@@ -3,24 +3,9 @@
 import { DotLottieReact } from "@lottiefiles/dotlottie-react";
 import type { DotLottie } from "@lottiefiles/dotlottie-react";
 import { useState, useRef, useCallback, useEffect, useMemo } from "react";
+import globalTokens from "../../../global.json";
 
-const DEFAULT_TOKENS = JSON.stringify(
-  {
-    "mat-hard-lit-primary-side-face": { light: "#E7D9FF", dark: "#F5EFFF" },
-    "mat-hard-lit-primary-side-soft-shadow": { light: "#A678F5", dark: "#D1B6FF" },
-    "mat-hard-lit-primary-side-hard-shadow": { light: "#ADCFFF", dark: "#CFE3FF" },
-    "side-face-disabled-strong": { light: "#7E7E7E", dark: "#A3A3A3" },
-    "side-soft-shadow-disabled-strong": { light: "#5F5F5F", dark: "#868686" },
-    "side-hard-shadow-disabled-strong": { light: "#434343", dark: "#9F9F9F" },
-    "page-bg": { light: "#F5F5F5", dark: "#2B2B2B" },
-    "shadow-pink": { light: "#FF82E7", dark: "#FF82E7" },
-    "shadow-cast": { light: "#000000", dark: "#000000" },
-    "light-orange-1": { light: "#F20000", dark: "#FFA3A3", alpha: 0 },
-    "light-orange-2": { light: "#F28100", dark: "#F9C992" },
-  },
-  null,
-  2
-);
+const DEFAULT_TOKENS = JSON.stringify(globalTokens, null, 2);
 
 interface ConvertResult {
   original: string;
