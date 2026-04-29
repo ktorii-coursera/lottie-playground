@@ -111,6 +111,26 @@ describe("parseLayerNameTokens", () => {
     expect(parseLayerNameTokens("shape [ token-a , token-b ]"))
       .toEqual(["token-a", "token-b"]);
   });
+
+  it("parses slash-format Figma intent token names", () => {
+    expect(parseLayerNameTokens("lit [Vegetation/Trunk]"))
+      .toEqual(["Vegetation/Trunk"]);
+  });
+
+  it("parses multiple slash-format tokens with commas", () => {
+    expect(parseLayerNameTokens("shape [Base/Highlight, Base/Shadow]"))
+      .toEqual(["Base/Highlight", "Base/Shadow"]);
+  });
+
+  it("parses deeply nested slash paths", () => {
+    expect(parseLayerNameTokens("foliage [Vegetation/Foliage/MidgroundDefault]"))
+      .toEqual(["Vegetation/Foliage/MidgroundDefault"]);
+  });
+
+  it("parses slash tokens with spaces in names", () => {
+    expect(parseLayerNameTokens("bg [Canvas/background colour]"))
+      .toEqual(["Canvas/background colour"]);
+  });
 });
 
 // --- convertWithMarkerTokens ---
@@ -502,5 +522,149 @@ describe("convertWithMarkerTokens", () => {
     const darkKfs = result.darkRules[0].keyframes;
     expect(colorsMatch(darkKfs[0].value, "#00FF00")).toBe(true);
     expect(colorsMatch(darkKfs[1].value, "#FFFF00")).toBe(true);
+  });
+
+  // Test 13: Slash-format token names (Figma intent tokens)
+  it("works with slash-delimited token names from Figma intent format", () => {
+    const tokens: ThemeTokens = {
+      "Vegetation/Trunk": { light: "#2D3440", dark: "#1E2229" },
+    };
+
+    const layer = makeShapeLayer(
+      "Tree trunk",
+      [makeFillGroup(makeStaticColor("#2D3440"))],
+      ["Vegetation/Trunk"]
+    );
+
+    const lottie = makeLottie([{ id: "comp_0", layers: [layer] }]);
+    const result = convertWithMarkerTokens(lottie, tokens);
+
+    const fill = result.data.assets[0].layers[0].shapes[0].it[0];
+    expect(fill.c.sid).toBe("Vegetation/Trunk");
+
+    const [lr, lg, lb] = hexToRgb01("#2D3440");
+    expect(result.slots["Vegetation/Trunk"]).toEqual({
+      p: { a: 0, k: [lr, lg, lb] },
+    });
+
+    const [dr, dg, db] = hexToRgb01("#1E2229");
+    expect(result.darkRules[0]).toEqual({
+      id: "Vegetation/Trunk",
+      type: "Color",
+      value: [dr, dg, db],
+    });
+  });
+
+  // Test 14: Multiple slash-format tokens on one layer (animated fill)
+  it("handles animated fill with multiple slash-format intent tokens", () => {
+    const tokens: ThemeTokens = {
+      "Base/Highlight": { light: "#E7D9FF", dark: "#D3BBFA" },
+      "Base/Shadow": { light: "#0F1114", dark: "#000000" },
+    };
+
+    const animatedColor = makeAnimatedColor([
+      { t: 0, hex: "#E7D9FF" },
+      { t: 75, hex: "#0F1114" },
+      { t: 150, hex: "#E7D9FF" },
+    ]);
+
+    const layer = makeShapeLayer(
+      "Animated base",
+      [makeFillGroup(animatedColor)],
+      ["Base/Highlight", "Base/Shadow"]
+    );
+
+    const lottie = makeLottie([{ id: "comp_0", layers: [layer] }]);
+    const result = convertWithMarkerTokens(lottie, tokens);
+
+    const fill = result.data.assets[0].layers[0].shapes[0].it[0];
+    expect(fill.c.a).toBe(0);
+    expect(fill.c.sid).toBeDefined();
+
+    const darkKfs = result.darkRules[0].keyframes;
+    expect(colorsMatch(darkKfs[0].value, "#D3BBFA")).toBe(true);
+    expect(colorsMatch(darkKfs[1].value, "#000000")).toBe(true);
+  });
+
+  // Test 15: Slash-format tokens with spaces (Canvas/background colour)
+  it("works with slash-format tokens containing spaces", () => {
+    const tokens: ThemeTokens = {
+      "Canvas/background colour": { light: "#FFFFFF", dark: "#000000" },
+    };
+
+    const layer = makeShapeLayer(
+      "bg",
+      [makeFillGroup(makeStaticColor("#FFFFFF"))],
+      ["Canvas/background colour"]
+    );
+
+    const lottie = makeLottie([], [layer]);
+    const result = convertWithMarkerTokens(lottie, tokens);
+
+    const fill = result.data.layers[0].shapes[0].it[0];
+    expect(fill.c.sid).toBe("Canvas/background colour");
+    expect(result.slots["Canvas/background colour"]).toBeDefined();
+  });
+
+  // Test 16: Deeply nested slash-format token (3+ levels)
+  it("works with deeply nested slash paths like Vegetation/Foliage/MidgroundDefault", () => {
+    const tokens: ThemeTokens = {
+      "Vegetation/Foliage/MidgroundDefault": { light: "#93B73B", dark: "#659F42" },
+    };
+
+    const layer = makeShapeLayer(
+      "foliage",
+      [makeFillGroup(makeStaticColor("#93B73B"))],
+      ["Vegetation/Foliage/MidgroundDefault"]
+    );
+
+    const lottie = makeLottie([], [layer]);
+    const result = convertWithMarkerTokens(lottie, tokens);
+
+    const fill = result.data.layers[0].shapes[0].it[0];
+    expect(fill.c.sid).toBe("Vegetation/Foliage/MidgroundDefault");
+
+    const [dr, dg, db] = hexToRgb01("#659F42");
+    expect(result.darkRules[0].value).toEqual([dr, dg, db]);
+  });
+
+  // Test 17: Slash-format gradient tokens
+  it("handles gradient with slash-format token names", () => {
+    const tokens: ThemeTokens = {
+      "TechElements/Accent/Pink": { light: "#FFA6EE", dark: "#FF82E7" },
+      "TechElements/Accent/Green": { light: "#3BC29A", dark: "#22A880" },
+    };
+
+    const [ar, ag, ab] = hexToRgb01("#FFA6EE");
+    const [br, bg, bb] = hexToRgb01("#3BC29A");
+
+    const gradientFill = {
+      ty: "gf",
+      nm: "Gradient Fill",
+      g: {
+        p: 2,
+        k: { a: 0, k: [0, ar, ag, ab, 1, br, bg, bb] },
+      },
+      s: { a: 0, k: [0, 0] },
+      e: { a: 0, k: [100, 0] },
+      t: 1,
+      r: 1,
+      o: { a: 0, k: 100 },
+    };
+
+    const layer = makeShapeLayer(
+      "Tech gradient",
+      [gradientFill],
+      ["TechElements/Accent/Pink", "TechElements/Accent/Green"]
+    );
+
+    const lottie = makeLottie([], [layer]);
+    const result = convertWithMarkerTokens(lottie, tokens);
+
+    expect(result.slots["gradient-1"]).toBeDefined();
+
+    const darkRule = result.darkRules.find((r: any) => r.id === "gradient-1");
+    expect(colorsMatch(darkRule.value[0].color, "#FF82E7")).toBe(true);
+    expect(colorsMatch(darkRule.value[1].color, "#22A880")).toBe(true);
   });
 });
