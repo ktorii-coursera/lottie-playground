@@ -108,7 +108,7 @@ export function convertWithMarkerTokens(
 
   // Build lightHex → token lookup for ALL provided tokens
   const lightHexToToken = new Map<string, TokenLookupEntry>();
-  for (const [tokenName, { light, dark }] of Object.entries(tokens).filter(([k]) => !k.startsWith("_"))) {
+  for (const [tokenName, { light, dark }] of Object.entries(tokens)) {
     const normalizedLight = light.toLowerCase();
     if (!lightHexToToken.has(normalizedLight)) {
       lightHexToToken.set(normalizedLight, {

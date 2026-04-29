@@ -46,8 +46,8 @@ for (const w of warnings) {
 }
 
 const output = {
-  _meta: { updatedAt: new Date().toISOString() },
-  ...tokens,
+  meta: { updatedAt: new Date().toISOString() },
+  tokens,
 };
 const json = JSON.stringify(output, null, 2) + "\n";
 await writeFile(resolve(outputPath), json);

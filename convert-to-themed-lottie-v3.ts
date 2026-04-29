@@ -18,7 +18,8 @@ if (!inputPath || !tokensPath) {
 }
 
 const lottieData = JSON.parse(await readFile(resolve(inputPath), "utf-8"));
-const tokens = JSON.parse(await readFile(resolve(tokensPath), "utf-8"));
+const raw = JSON.parse(await readFile(resolve(tokensPath), "utf-8"));
+const tokens = raw.tokens ?? raw;
 
 const { data, slots, lightRules, darkRules, logs } = convertWithMarkerTokens(
   lottieData,
