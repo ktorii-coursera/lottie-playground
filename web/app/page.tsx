@@ -5,6 +5,7 @@ import type { DotLottie } from "@lottiefiles/dotlottie-react";
 import { useState, useRef, useCallback, useEffect, useMemo } from "react";
 import globalTokens from "../global.json";
 
+const tokensMeta = (globalTokens as any)._meta as { updatedAt?: string } | undefined;
 const DEFAULT_TOKENS = JSON.stringify(globalTokens, null, 2);
 
 interface ConvertResult {
@@ -185,9 +186,14 @@ export default function HomePage() {
     <PasswordGate>
       <main className="min-h-screen p-6 md:p-12 max-w-6xl mx-auto">
         <h1 className="text-3xl font-bold mb-2">Lottie Theme Playground</h1>
-        <p className="text-sm text-gray-500 mb-8">
+        <p className="text-sm text-gray-500 mb-2">
           Upload a Lottie JSON and convert it with illustration intent tokens for light/dark theming.
         </p>
+        {tokensMeta?.updatedAt && (
+          <p className="text-xs text-gray-400 mb-8">
+            Tokens last updated: {new Date(tokensMeta.updatedAt).toLocaleDateString("en-US", { year: "numeric", month: "long", day: "numeric" })}
+          </p>
+        )}
 
         <div className="grid md:grid-cols-2 gap-6 mb-6">
           <div>

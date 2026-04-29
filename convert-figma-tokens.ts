@@ -45,7 +45,11 @@ for (const w of warnings) {
   console.warn(w);
 }
 
-const json = JSON.stringify(tokens, null, 2) + "\n";
+const output = {
+  _meta: { updatedAt: new Date().toISOString() },
+  ...tokens,
+};
+const json = JSON.stringify(output, null, 2) + "\n";
 await writeFile(resolve(outputPath), json);
 await writeFile(resolve("web", outputPath), json);
 
