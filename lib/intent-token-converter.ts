@@ -91,7 +91,7 @@ export function convertWithIntentTokens(
 
   // Build lightHex → token lookup for keyframe color matching
   const lightHexToToken = new Map<string, TokenLookupEntry>();
-  for (const [tokenName, { light, dark }] of Object.entries(tokens)) {
+  for (const [tokenName, { light, dark }] of Object.entries(tokens).filter(([k]) => !k.startsWith("_"))) {
     const normalizedLight = light.toLowerCase();
     if (!lightHexToToken.has(normalizedLight)) {
       lightHexToToken.set(normalizedLight, {
