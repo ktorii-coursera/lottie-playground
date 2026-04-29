@@ -45,7 +45,9 @@ for (const w of warnings) {
   console.warn(w);
 }
 
-await writeFile(resolve(outputPath), JSON.stringify(tokens, null, 2) + "\n");
+const json = JSON.stringify(tokens, null, 2) + "\n";
+await writeFile(resolve(outputPath), json);
+await writeFile(resolve("web", outputPath), json);
 
 const count = Object.keys(tokens).length;
-console.log(`Wrote ${count} tokens to ${outputPath}`);
+console.log(`Wrote ${count} tokens to ${outputPath} and web/${outputPath}`);

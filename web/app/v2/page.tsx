@@ -3,7 +3,7 @@
 import { DotLottieReact } from "@lottiefiles/dotlottie-react";
 import type { DotLottie } from "@lottiefiles/dotlottie-react";
 import { useState, useRef, useCallback, useEffect, useMemo } from "react";
-import globalTokens from "../../../global.json";
+import globalTokens from "../../global.json";
 
 const DEFAULT_TOKENS = JSON.stringify(globalTokens, null, 2);
 
