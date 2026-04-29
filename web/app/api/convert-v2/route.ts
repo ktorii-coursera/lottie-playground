@@ -1,9 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { DotLottie } from "@dotlottie/dotlottie-js";
-import {
-  convertWithIntentTokens,
-  ThemeTokens,
-} from "@/app/lib/intent-token-converter";
+import { ThemeTokens } from "@/app/lib/intent-token-converter";
+import { convertWithMarkerTokens } from "@/app/lib/marker-token-converter";
 
 export const maxDuration = 30;
 
@@ -23,7 +21,6 @@ export async function POST(req: NextRequest) {
 
     const allLogs: string[] = [];
 
-    // 1. Create original .lottie from unmodified input
     const originalDotLottie = new DotLottie();
     originalDotLottie.addAnimation({
       id: "animation-original",
@@ -33,8 +30,7 @@ export async function POST(req: NextRequest) {
     const originalBase64 = Buffer.from(originalBuffer).toString("base64");
     allLogs.push("Created original.lottie from input JSON.");
 
-    // 2. Create themed .lottie with slots + Light/Dark themes
-    const themedResult = convertWithIntentTokens(lottieJson, tokens);
+    const themedResult = convertWithMarkerTokens(lottieJson, tokens);
     allLogs.push(...themedResult.logs);
 
     const themedDotLottie = new DotLottie();
@@ -43,7 +39,6 @@ export async function POST(req: NextRequest) {
       data: themedResult.data,
     });
 
-    // Light theme (provides animated keyframes for color transitions)
     if (themedResult.lightRules.length > 0) {
       themedDotLottie.addTheme({
         id: "Light",
