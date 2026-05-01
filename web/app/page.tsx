@@ -28,6 +28,130 @@ function base64ToArrayBuffer(base64: string): ArrayBuffer {
 
 type Theme = "light" | "dark";
 
+interface LayerColorMatch {
+  property: string;
+  hex: string;
+  tokens: string[];
+}
+
+function rgbToHex(r: number, g: number, b: number): string {
+  return "#" + [r, g, b].map(c => Math.round(c * 255).toString(16).padStart(2, "0")).join("");
+}
+
+function colorsMatch(lottieRgb: number[], targetHex: string): boolean {
+  const hex = targetHex.toLowerCase();
+  const tr = parseInt(hex.slice(1, 3), 16) / 255;
+  const tg = parseInt(hex.slice(3, 5), 16) / 255;
+  const tb = parseInt(hex.slice(5, 7), 16) / 255;
+  return (
+    Math.abs(Math.round(lottieRgb[0] * 255) - Math.round(tr * 255)) <= 1 &&
+    Math.abs(Math.round(lottieRgb[1] * 255) - Math.round(tg * 255)) <= 1 &&
+    Math.abs(Math.round(lottieRgb[2] * 255) - Math.round(tb * 255)) <= 1
+  );
+}
+
+function reverseTokenLookup(
+  lottieJson: any,
+  tokens: Record<string, { light: string; dark: string }>
+): Record<string, LayerColorMatch[]> {
+  const hexToTokens = new Map<string, string[]>();
+  for (const [name, { light }] of Object.entries(tokens)) {
+    const h = light.toLowerCase();
+    if (!hexToTokens.has(h)) hexToTokens.set(h, []);
+    hexToTokens.get(h)!.push(name);
+  }
+
+  const result: Record<string, LayerColorMatch[]> = {};
+
+  function findTokensForColor(rgb: number[]): { hex: string; tokens: string[] } | null {
+    if (!Array.isArray(rgb) || rgb.length < 3 || typeof rgb[0] !== "number") return null;
+    const hex = rgbToHex(rgb[0], rgb[1], rgb[2]);
+    const matched: string[] = [];
+    for (const [lightHex, names] of hexToTokens) {
+      if (colorsMatch(rgb, lightHex)) matched.push(...names);
+    }
+    return matched.length > 0 ? { hex, tokens: matched } : null;
+  }
+
+  function extractColorsFromShapes(shapes: any[], layerName: string) {
+    if (!Array.isArray(shapes)) return;
+    for (const shape of shapes) {
+      if (shape.ty === "gr" && Array.isArray(shape.it)) {
+        extractColorsFromShapes(shape.it, layerName);
+        continue;
+      }
+      if ((shape.ty === "fl" || shape.ty === "st") && shape.c) {
+        const colorObj = shape.c;
+        const propLabel = shape.ty === "fl" ? "fill" : "stroke";
+        if (colorObj.a === 0 && Array.isArray(colorObj.k)) {
+          const match = findTokensForColor(colorObj.k);
+          if (match) {
+            if (!result[layerName]) result[layerName] = [];
+            result[layerName].push({ property: propLabel, ...match });
+          }
+        } else if (colorObj.a === 1 && Array.isArray(colorObj.k)) {
+          for (const kf of colorObj.k) {
+            if (kf.s) {
+              const match = findTokensForColor(kf.s);
+              if (match) {
+                if (!result[layerName]) result[layerName] = [];
+                result[layerName].push({ property: `${propLabel} (keyframe)`, ...match });
+              }
+            }
+          }
+        }
+      }
+      if ((shape.ty === "gf" || shape.ty === "gs") && shape.g?.k) {
+        const propLabel = shape.ty === "gf" ? "gradient-fill" : "gradient-stroke";
+        const gData = shape.g.k;
+        const numStops = shape.g.p;
+        const processStops = (k: number[]) => {
+          if (!Array.isArray(k)) return;
+          for (let i = 0; i < numStops; i++) {
+            const base = i * 4;
+            if (base + 3 >= k.length) break;
+            const match = findTokensForColor([k[base + 1], k[base + 2], k[base + 3]]);
+            if (match) {
+              if (!result[layerName]) result[layerName] = [];
+              result[layerName].push({ property: `${propLabel} stop ${i}`, ...match });
+            }
+          }
+        };
+        if (gData.a === 0) processStops(gData.k);
+        else if (gData.a === 1 && Array.isArray(gData.k)) {
+          for (const kf of gData.k) {
+            if (kf.s) processStops(kf.s);
+          }
+        }
+      }
+    }
+  }
+
+  function walkLayers(layers: any[], parentPath: string = "") {
+    if (!Array.isArray(layers)) return;
+    for (const layer of layers) {
+      const name = parentPath ? `${parentPath} / ${layer.nm || "unnamed"}` : (layer.nm || "unnamed");
+      if (Array.isArray(layer.shapes)) {
+        extractColorsFromShapes(layer.shapes, name);
+      }
+      if (Array.isArray(layer.layers)) {
+        walkLayers(layer.layers, name);
+      }
+    }
+  }
+
+  walkLayers(lottieJson.layers);
+  if (Array.isArray(lottieJson.assets)) {
+    for (const asset of lottieJson.assets) {
+      if (Array.isArray(asset.layers)) {
+        walkLayers(asset.layers, asset.nm || asset.id || "asset");
+      }
+    }
+  }
+
+  return result;
+}
+
 function PasswordGate({ children }: { children: React.ReactNode }) {
   const [input, setInput] = useState("");
   const [authed, setAuthed] = useState(false);
@@ -91,6 +215,8 @@ export default function HomePage() {
   const [pauseLabel, setPauseLabel] = useState("Pause");
   const pausedRef = useRef(false);
   const [frameInput, setFrameInput] = useState("0");
+  const [tokenLookupResult, setTokenLookupResult] = useState<Record<string, LayerColorMatch[]> | null>(null);
+  const [tokenLookupError, setTokenLookupError] = useState("");
 
   const originalRef = useRef<DotLottie | null>(null);
   const themedRef = useRef<DotLottie | null>(null);
@@ -127,6 +253,26 @@ export default function HomePage() {
   function handleGoToFrame() {
     const frame = parseFloat(frameInput);
     if (!isNaN(frame)) both(dl => dl.setFrame(frame));
+  }
+
+  function handleTokenLookup() {
+    setTokenLookupError("");
+    setTokenLookupResult(null);
+
+    let tokens;
+    try { tokens = JSON.parse(tokensText); }
+    catch { setTokenLookupError("Invalid tokens JSON"); return; }
+
+    let lottieJson;
+    try { lottieJson = JSON.parse(lottieText); }
+    catch { setTokenLookupError("Paste or upload a Lottie JSON first"); return; }
+
+    const result = reverseTokenLookup(lottieJson, tokens);
+    if (Object.keys(result).length === 0) {
+      setTokenLookupError("No matching tokens found for any layer colors");
+      return;
+    }
+    setTokenLookupResult(result);
   }
 
   function handleFileUpload(e: React.ChangeEvent<HTMLInputElement>) {
@@ -331,6 +477,28 @@ export default function HomePage() {
             </pre>
           </details>
         )}
+        <hr className="my-10 border-gray-200 dark:border-gray-700" />
+
+        <div className="mb-12">
+          <h2 className="text-xl font-semibold mb-2">Token Name Lookup</h2>
+          <p className="text-sm text-gray-500 mb-4">
+            Reverse lookup from Lottie layer colors to intent token names. Insert the desired token name in the square brackets for each layer name in After Effects, then export using Bodymovin and use this playground to view the dark mode colors.
+          </p>
+          <button onClick={handleTokenLookup}
+            className="px-6 py-2.5 bg-gray-800 hover:bg-gray-900 dark:bg-gray-200 dark:hover:bg-gray-300 text-white dark:text-black font-medium rounded-lg transition-colors mb-4">
+            Get Token Names
+          </button>
+          {tokenLookupError && (
+            <div className="mb-4 p-3 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg text-red-700 dark:text-red-400 text-sm">
+              {tokenLookupError}
+            </div>
+          )}
+          {tokenLookupResult && (
+            <pre className="p-4 bg-gray-50 dark:bg-gray-900 rounded-lg text-xs overflow-x-auto max-h-[32rem] overflow-y-auto border border-gray-200 dark:border-gray-700 font-mono">
+              {JSON.stringify(tokenLookupResult, null, 2)}
+            </pre>
+          )}
+        </div>
       </main>
     </PasswordGate>
   );
